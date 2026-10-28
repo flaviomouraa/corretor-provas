@@ -7,7 +7,9 @@ description: Manter e evoluir o app "Corretor de Provas" (correção de provas d
 
 App para professores corrigirem provas de múltipla escolha fotografando um cartão-resposta. O professor cadastra o gabarito, cola o cartão na prova (Word) ou imprime a folha A4, fotografa as provas preenchidas e o app lê, dá a nota, guarda a correção com a imagem e mostra gráficos da turma.
 
-O usuário é professor, não programador. Escreva para ele em português simples, sem jargão, e explique o que ele precisa fazer com passos curtos.
+O usuário é professor, não programador, e usa o app no celular (Android pelo APK; iPhone pelo site instalado). Escreva para ele em português simples, sem jargão, e explique o que ele precisa fazer com passos curtos e numerados. Ele gostou do app como está: preserve o visual e o jeito de usar, mude só o que for pedido.
+
+O estado atual (versões publicadas, pendências, histórico de pedidos) está em `references/estado-atual.md`. Leia no começo de qualquer conversa sobre o app e atualize ao terminar uma mudança.
 
 ## Mapa do projeto
 
@@ -50,6 +52,8 @@ Estas regras existem porque cartões já impressos e dados já salvos dependem d
 
 - **Artifact**: `localStorage` some ao fechar o app do Claude. Por isso o cofre vai para o `db` em `data/users/<id>/` (privado por pessoa). Só o dono e quem tem nível Contribuidor gravam; outros visitantes ficam só no navegador. Documento máximo 256 KiB: o cofre é comprimido com gzip antes de cifrar.
 - **Artifact**: sem `window.print()`, `alert/confirm/prompt`, `<a download>` nem câmera ao vivo. Use modais próprios, a capacidade `downloads` e `<input type=file capture=environment>` (abre a câmera nativa). Ao republicar com `capabilities`, mande o conjunto completo (`downloads`, `db`, `user`).
+- **`box-sizing`**: fora do Claude não há reset; sem `*{box-sizing:border-box}` os campos com `width:100%` + padding passam da caixa e se sobrepõem (aconteceu no cadastro de gabarito no APK). Mantenha a regra no topo do CSS.
+- **Telas em coluna única no celular**: o professor pediu o gabarito "todo na vertical" (uma questão por linha) ao marcar as respostas certas (`.bubbles.vertical` no editor). Não volte a usar várias colunas ali.
 - **`[hidden]`**: classes com `display:grid/flex` vencem o atributo `hidden`; a regra `[hidden]{display:none!important}` precisa estar no CSS do próprio arquivo (fora do Claude não existe o reset da plataforma).
 - **Código do cartão**: a área amostrada em cada bit precisa ser pequena (±0,004 em coordenadas unitárias); maior que isso pega papel branco em cartões altos (100 questões).
 - **Fotos reais**: o desfoque transforma o marcador vazado em quadrado cheio. Há uma última tentativa que aceita quadrados cheios, mas só se o código do cartão confirmar (senão daria falsos positivos com bolinhas pintadas).
@@ -68,3 +72,4 @@ Estas regras existem porque cartões já impressos e dados já salvos dependem d
 
 - `references/leitura-optica.md`: especificação do cartão e do algoritmo de leitura (leia antes de mexer em OMR ou no desenho do cartão).
 - `references/publicar.md`: como publicar no Claude (Artifact), GitHub Pages, APK e como o professor instala no Android e no iPhone.
+- `references/estado-atual.md`: versões publicadas, pendências e histórico do que o professor pediu.

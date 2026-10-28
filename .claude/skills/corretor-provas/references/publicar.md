@@ -15,12 +15,20 @@ git add -A && git commit -m "..." && git push -u origin main
 ```
 
 - Repositório: `flaviomouraa/corretor-provas` (público, exigido pelo Pages gratuito). Endereço: https://flaviomouraa.github.io/corretor-provas/
-- Ativar uma vez: Settings → Pages → Build and deployment → **Deploy from a branch**, Branch **main**, pasta **/docs**.
 - Atualizações chegam sozinhas: o service worker busca a página na rede e cai no cache sem internet. O nome do cache muda a cada build (hash do HTML).
 
+Ativar o site (uma vez; dá para fazer pelo celular): abrir https://github.com/flaviomouraa/corretor-provas/settings/pages → Source **Deploy from a branch** → Branch **main** e pasta **/docs** → **Save** → esperar 1–3 min. Para conferir daqui: `curl -s https://api.github.com/repos/flaviomouraa/corretor-provas | grep has_pages` (o domínio github.io costuma estar bloqueado no ambiente, então não dá para abrir o site direto).
+
 Instalar no celular:
-- **Android (Chrome)**: abrir o endereço → menu ⋮ → **Instalar app**.
-- **iPhone (Safari)**: abrir o endereço → **Compartilhar** → **Adicionar à Tela de Início**. No iPhone os arquivos (PDF, backup) saem pelo menu de compartilhar.
+- **Android (Chrome)**: abrir o endereço → menu ⋮ → **Instalar app**. (No Android o professor usa o APK.)
+- **iPhone (Safari)**: abrir o endereço → botão **Compartilhar** (quadrado com seta para cima) → **Adicionar à Tela de Início** → **Adicionar**. Abrir sempre pelo ícone da tela inicial: o iPhone guarda os dados do ícone separados dos da aba do Safari.
+
+Como o app se comporta no iPhone:
+- "Fotografar prova" pergunta **Tirar Foto** ou **Fototeca** (é o `<input capture>`; não há câmera ao vivo).
+- PDF, imagem do cartão, planilha e backup saem pelo **menu de compartilhar** (`navigator.share` com arquivo): "Salvar em Arquivos", WhatsApp, e-mail.
+- Funciona sem internet depois da primeira abertura; atualizações chegam sozinhas (service worker).
+- Dados ficam no aparelho. Para levar do Android para o iPhone: Conta → Baixar backup no Android, mandar o arquivo para o iPhone, salvar em Arquivos, e no iPhone **Criar conta → Restaurar um backup**.
+- App Store exige conta de desenvolvedor Apple (US$ 99/ano) e revisão; só sugira se o professor quiser distribuir para outros.
 
 ## 3. APK Android
 
@@ -36,3 +44,12 @@ O APK é só para Android. No iPhone use a PWA (App Store exige conta Apple de U
 - A cada versão nova, aumente `versionCode` e `versionName` em `android/app/build.gradle`.
 
 Instalar o APK: baixar no celular, abrir o arquivo e permitir "instalar apps desconhecidos" para o navegador ou o app de arquivos.
+
+Enquanto a chave permanente não estiver nos segredos do GitHub, **cada build tem assinatura diferente** e o Android não instala por cima. Oriente sempre, ao entregar uma versão nova: (1) Conta → Baixar backup; (2) desinstalar o app antigo; (3) instalar o novo; (4) Criar conta → Restaurar um backup.
+
+Para acompanhar a compilação daqui (API pública, sem login):
+```bash
+curl -s https://api.github.com/repos/flaviomouraa/corretor-provas/actions/runs   # status do "Gerar APK"
+curl -s https://api.github.com/repos/flaviomouraa/corretor-provas/releases/latest # link do APK
+```
+O workflow tem filtro de pastas: um push que não muda `index.html`, `docs/`, `android/` ou o próprio workflow não gera APK. Baixe o APK da release e mande ao professor com SendUserFile.
