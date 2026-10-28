@@ -1,0 +1,1646 @@
+<title>Corretor de Provas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: app de uma coluna, barra superior fixa e abas embaixo (alcance do polegar). Papel frio + tinta de caneta azul. */
+:root {
+  --bg: #EEF1F6;
+  --surface: #FFFFFF;
+  --sunk: #E3E8F0;
+  --ink: #141B2E;
+  --muted: #586179;
+  --line: #D3DAE6;
+  --grid: #E4E8EF;
+  --line-strong: #9AA5BB;
+  --accent: #2340C4;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCE3FF;
+  --ok: #17784A;
+  --ok-soft: #D9F2E5;
+  --bad: #BE2534;
+  --bad-soft: #FBE0E3;
+  --warn: #A55F00;
+  --warn-soft: #FDEBCF;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1320; --surface: #161D2D; --sunk: #1D2538; --ink: #E7EBF3; --muted: #9AA4BA; --grid: #232C40;
+    --line: #283149; --line-strong: #4A5672; --accent: #8EA2FF; --accent-ink: #0E1320; --accent-soft: #23305E;
+    --ok: #4FC98D; --ok-soft: #133426; --bad: #FF7A85; --bad-soft: #3C1A20; --warn: #F2AE55; --warn-soft: #3A2A12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1320; --surface: #161D2D; --sunk: #1D2538; --ink: #E7EBF3; --muted: #9AA4BA; --grid: #232C40;
+  --line: #283149; --line-strong: #4A5672; --accent: #8EA2FF; --accent-ink: #0E1320; --accent-soft: #23305E;
+  --ok: #4FC98D; --ok-soft: #133426; --bad: #FF7A85; --bad-soft: #3C1A20; --warn: #F2AE55; --warn-soft: #3A2A12;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.2rem; font-weight: 600; }
+h3 { font-size: 1.02rem; font-weight: 600; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.inner { max-width: 880px; margin: 0 auto; }
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tight { gap: 3px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.spread { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar .inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; min-width: 0; }
+.brand svg { width: 28px; height: 28px; flex: none; color: var(--accent); }
+.who { font-family: var(--font-body); font-weight: 400; font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+main.gutter { padding-block: 20px 110px; }
+.view { display: flex; flex-direction: column; gap: 18px; }
+
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tabs .inner { display: grid; grid-template-columns: repeat(4, 1fr); }
+.tab { background: none; border: 0; padding: 9px 4px 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.78rem; color: var(--muted); cursor: pointer; }
+.tab svg { width: 22px; height: 22px; }
+.tab[aria-current="page"] { color: var(--accent); font-weight: 700; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px;
+  border: 1.5px solid var(--line-strong); background: var(--surface); cursor: pointer; font-weight: 700; text-decoration: none; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--accent); padding: 0 10px; }
+.btn.big { min-height: 56px; font-size: 1.05rem; width: 100%; border-radius: 14px; }
+.btn.sm { min-height: 36px; padding: 0 12px; font-size: 0.875rem; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 0.9rem; min-width: 0; }
+label.field .hint { font-weight: 400; color: var(--muted); }
+input[type=text], input[type=password], input[type=number], select {
+  min-height: 46px; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--line-strong); background: var(--surface); width: 100%; min-width: 0; }
+input:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.accent { background: var(--accent-soft); color: var(--accent); }
+.keystrip { font-family: var(--font-mono); font-size: 0.9rem; letter-spacing: 0.04em; background: var(--sunk); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted); border: 1.5px dashed var(--line-strong); border-radius: var(--r); }
+.note { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; font-size: 0.875rem; }
+
+.bubbles { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 4px 18px; }
+.qrow { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 8px; }
+.qrow .qn { font-family: var(--font-mono); width: 2.2em; text-align: right; color: var(--muted); font-size: 0.9rem; }
+.qrow.st-ok { background: var(--ok-soft); }
+.qrow.st-bad { background: var(--bad-soft); }
+.qrow.st-blank, .qrow.st-multi { background: var(--warn-soft); }
+.qrow .flag { font-size: 0.7rem; font-weight: 700; color: var(--warn); margin-left: auto; text-transform: uppercase; letter-spacing: .05em; }
+.bub { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: var(--surface); font-weight: 700; font-size: 0.85rem; cursor: pointer; position: relative; color: var(--muted); padding: 0; flex: none; }
+.bub.sel { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.bub.key::after { content: ""; position: absolute; right: -2px; top: -2px; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); border: 2px solid var(--surface); }
+
+.score { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.score .big { font-family: var(--font-body); font-weight: 700; font-size: 3rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.scan-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 760px) { .scan-wrap { grid-template-columns: 300px minmax(0, 1fr); align-items: start; } }
+.scan-img { width: 100%; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); background: #fff; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--sunk); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.stat b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 0.78rem; color: var(--muted); }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; font-family: var(--font-body); }
+.chart text { fill: var(--muted); font-size: 12px; }
+.chart .hit { fill: transparent; }
+.keylist { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--muted); }
+.qbars { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.qbar { background: var(--sunk); border-radius: 6px; padding: 5px 6px; font-size: 0.75rem; position: relative; overflow: hidden; }
+.qbar .fill { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--ok); }
+.qbar.low .fill { background: var(--bad); }
+.qbar b { font-family: var(--font-mono); }
+.tip { position: fixed; z-index: 40; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 0.82rem; padding: 6px 9px; border-radius: 6px; max-width: 240px; line-height: 1.3; }
+
+.lock { min-height: 100%; display: grid; place-items: center; padding-block: 32px; }
+.lock-card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 18px; }
+.lock-art { width: 56px; height: 56px; color: var(--accent); }
+.lock h1 { font-size: 2rem; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--sunk); border-radius: 999px; padding: 4px; }
+.seg button { border: 0; background: transparent; border-radius: 999px; min-height: 40px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.err { color: var(--bad); font-weight: 700; font-size: 0.9rem; }
+
+.modal-back { position: fixed; inset: 0; z-index: 20; background: rgba(8, 12, 24, 0.55); display: grid; place-items: end center;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+@media (min-width: 640px) { .modal-back { place-items: center; } }
+.modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.modal .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 30; background: var(--ink); color: var(--surface);
+  padding: 10px 16px; border-radius: 999px; font-weight: 700; max-width: calc(100% - 32px); text-align: center; }
+.busy { position: fixed; inset: 0; z-index: 25; background: rgba(8,12,24,.6); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.1rem; }
+.zoombox { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); }
+.zoombox canvas { display: block; max-width: none; border: 0; border-radius: 0; }
+.sheet-preview { max-width: 100%; max-height: 50vh; margin: 0 auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+ul.tips { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0,1fr)); } .score .big { font-size: 2.5rem; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="lock" class="lock gutter" hidden></div>
+
+<div id="app" hidden>
+  <header class="topbar gutter">
+    <div class="inner">
+      <div class="brand">
+        <svg viewBox="0 0 28 28" aria-hidden="true"><g fill="currentColor"><path d="M0 0h8v8H0zM2 2v4h4V2z" fill-rule="evenodd"/><path d="M20 0h8v8h-8zM22 2v4h4V2z" fill-rule="evenodd"/><path d="M0 20h8v8H0zM2 22v4h4v-4z" fill-rule="evenodd"/><path d="M20 20h8v8h-8zM22 22v4h4v-4z" fill-rule="evenodd"/><circle cx="11" cy="12" r="2.2"/><circle cx="17" cy="16" r="2.2"/></g><g fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="17" cy="12" r="2.2"/><circle cx="11" cy="16" r="2.2"/></g></svg>
+        <div class="stack" style="gap:0"><span>Corretor de Provas</span><span class="who" id="who"></span></div>
+      </div>
+      <button class="btn quiet" id="btn-lock" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>
+        Sair
+      </button>
+    </div>
+  </header>
+  <main class="gutter"><div class="inner view" id="view"></div></main>
+  <nav class="tabs gutter" aria-label="Seções">
+    <div class="inner">
+      <button class="tab" type="button" data-tab="gabaritos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Gabaritos</button>
+      <button class="tab" type="button" data-tab="corrigir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Corrigir</button>
+      <button class="tab" type="button" data-tab="resultados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Resultados</button>
+      <button class="tab" type="button" data-tab="conta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Conta</button>
+    </div>
+  </nav>
+</div>
+
+<div id="modal" class="modal-back" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="busy" class="busy" hidden>Lendo a folha…</div>
+<div id="tip" class="tip" hidden></div>
+
+<input type="file" id="file-cam" accept="image/*" capture="environment" hidden>
+<input type="file" id="file-gal" accept="image/*" hidden>
+<input type="file" id="file-backup" accept=".json,application/json" hidden>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   Utilidades
+   ============================================================ */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const LET = "ABCDE";
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const fmtNum = (n) => (Math.round(n * 10) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtDate = (t) => new Date(t).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+const fmtShort = (t) => new Date(t).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+const letter = (a) => (a === null || a === undefined ? "–" : a === -1 ? "*" : LET[a]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* ============================================================
+   Contas e cofre criptografado
+   Cada conta (usuário + senha) tem seu próprio cofre AES-GCM com
+   chave derivada da senha (PBKDF2). A senha nunca é gravada.
+   Imagens das provas corrigidas ficam no IndexedDB, também cifradas.
+   ============================================================ */
+const PREFIX = "corretor-provas.conta.";
+const LAST_USER = "corretor-provas.ultimo-usuario";
+const LEGACY_KEY = "corretor-provas.cofre.v1";
+const ITER = 250000;
+const te = new TextEncoder(), td = new TextDecoder();
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+function b64(buf) { const a = new Uint8Array(buf); let s = ""; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(s) { const b = atob(s); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+const normUser = (u) => String(u || "").trim().toLowerCase();
+async function acctId(user) {
+  const h = await crypto.subtle.digest("SHA-256", te.encode("corretor-provas:" + normUser(user)));
+  return Array.from(new Uint8Array(h).slice(0, 12), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function deriveKey(pw, salt, iter = ITER) {
+  const base = await crypto.subtle.importKey("raw", te.encode(pw), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function encBytes(key, bytes) { const iv = crypto.getRandomValues(new Uint8Array(12)); return { iv, ct: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes) }; }
+async function decBytes(key, o) { return crypto.subtle.decrypt({ name: "AES-GCM", iv: o.iv }, key, o.ct); }
+const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
+const HAS_GZ = typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined";
+async function gz(bytes, compress) {
+  const st = new Blob([bytes]).stream().pipeThrough(compress ? new CompressionStream("gzip") : new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(st).arrayBuffer());
+}
+async function sealVault(key, salt, data) {
+  let pt = te.encode(JSON.stringify(data));
+  if (HAS_GZ) pt = await gz(pt, true);
+  const { iv, ct } = await encBytes(key, pt);
+  return JSON.stringify({ app: "corretor-provas", v: 2, kdf: "PBKDF2-SHA256", iter: ITER, z: HAS_GZ ? 1 : 0, t: Date.now(), salt: b64(salt), iv: b64(iv), ct: b64(ct) });
+}
+async function openVault(blob, pw) {
+  const o = JSON.parse(blob);
+  if (o.app !== "corretor-provas") throw new Error("formato");
+  const salt = unb64(o.salt);
+  const key = await deriveKey(pw, salt, o.iter || ITER);
+  let pt = new Uint8Array(await decBytes(key, { iv: unb64(o.iv), ct: unb64(o.ct) })); // falha se a senha estiver errada
+  if (o.z) pt = await gz(pt, false);
+  return { key, salt, data: JSON.parse(td.decode(pt)) };
+}
+const blobTime = (b) => { try { return JSON.parse(b).t || 0; } catch { return -1; } };
+
+/* Armazenamento permanente: o cofre (já cifrado) também fica guardado na
+   conta Claude de quem usa o app, então sobrevive ao fechar o app e aparece
+   em outros aparelhos. O navegador guarda uma cópia local. */
+const cloud = { db: null, uid: null };
+cloud.ready = (async () => {
+  try {
+    if (!(window.claude && typeof window.claude.use === "function")) return;
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    if (!db || !user) return;
+    const id = await user.id();
+    if (id) { cloud.db = db; cloud.uid = id; }
+  } catch (e) { console.warn(e); }
+})();
+const cloudReady = async () => { await Promise.race([cloud.ready, sleep(9000)]); return !!cloud.db; };
+const cdoc = (name) => cloud.db.doc(`data/users/${cloud.uid}/${name}`);
+let writeChain = Promise.resolve(), cloudWarned = false;
+function cloudWrite(name, data) { // uma gravação por vez
+  if (!cloud.db) return Promise.resolve(false);
+  const p = writeChain.then(() => (data === null ? cdoc(name).delete() : cdoc(name).set(data))).then(() => true, (e) => {
+    console.warn(e);
+    if (!cloudWarned) { cloudWarned = true; toast(e && e.code === "quota_exceeded" ? "O espaço de armazenamento acabou. Faça um backup e apague provas antigas." : "Não consegui salvar na nuvem agora. Os dados ficaram neste aparelho."); }
+    return false;
+  });
+  writeChain = p;
+  return p;
+}
+async function cloudGet(name) { if (!cloud.db) return null; try { const d = await cdoc(name).get(); return d.exists ? d.data() : null; } catch (e) { console.warn(e); return null; } }
+async function vaultBlob(id) { // a versão mais recente entre nuvem e aparelho
+  const local = ls.get(PREFIX + id), remote = await cloudGet("conta-" + id);
+  const rb = remote && remote.blob;
+  if (rb && (!local || blobTime(rb) >= blobTime(local))) { ls.set(PREFIX + id, rb); return rb; }
+  return local;
+}
+
+/* IndexedDB: imagens cifradas dos cartões corrigidos */
+const idb = {
+  db: null,
+  async open() {
+    if (this.db) return this.db;
+    this.db = await new Promise((res, rej) => {
+      const r = indexedDB.open("corretor-provas", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("imagens");
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return this.db;
+  },
+  async run(mode, fn) {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("imagens", mode), req = fn(t.objectStore("imagens"));
+      t.oncomplete = () => res(req ? req.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  put(k, v) { return this.run("readwrite", (s) => s.put(v, k)); },
+  get(k) { return this.run("readonly", (s) => s.get(k)); },
+  del(k) { return this.run("readwrite", (s) => s.delete(k)); },
+  async keys(prefix) { const all = await this.run("readonly", (s) => s.getAllKeys()); return all.filter((k) => String(k).startsWith(prefix)); },
+};
+const imgKey = (rid) => `${S.acct}:${rid}`;
+const imgDoc = (rid, acct = S.acct) => `img-${acct}-${rid}`;
+async function putImageEnc(rid, enc) {
+  let ok = false;
+  try { await idb.put(imgKey(rid), enc); ok = true; } catch (e) { console.warn(e); }
+  const c = await cloudWrite(imgDoc(rid), { acct: S.acct, iv: b64(enc.iv), ct: b64(enc.ct) });
+  return ok || c;
+}
+async function getImageEnc(rid) {
+  try { const o = await idb.get(imgKey(rid)); if (o) return o; } catch {}
+  const d = await cloudGet(imgDoc(rid));
+  if (!d) return null;
+  const o = { iv: unb64(d.iv), ct: unb64(d.ct).buffer };
+  idb.put(imgKey(rid), o).catch(() => {});
+  return o;
+}
+async function imageBytes(rid, key = S.key) { const o = await getImageEnc(rid); return o ? decBytes(key, o) : null; }
+async function saveImage(rid, canvas) {
+  try {
+    const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.8));
+    return await putImageEnc(rid, await encBytes(S.key, await blob.arrayBuffer()));
+  } catch (e) { console.warn(e); return false; }
+}
+async function loadImage(rid) {
+  try {
+    const bytes = await imageBytes(rid); if (!bytes) return null;
+    const bmp = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
+    const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height; c.getContext("2d").drawImage(bmp, 0, 0);
+    return c;
+  } catch (e) { console.warn(e); return null; }
+}
+async function deleteImage(rid) { try { await idb.del(imgKey(rid)); } catch {} cloudWrite(imgDoc(rid), null); }
+
+/* ============================================================
+   Estado
+   ============================================================ */
+const S = { acct: null, key: null, salt: null, data: null, tab: "gabaritos", reveal: {}, review: null, edit: null, scanGab: "auto", resGab: null, resTurma: "", lastActive: Date.now(), fails: 0 };
+const AUTOLOCK_MIN = 10;
+
+async function persist() {
+  const blob = await sealVault(S.key, S.salt, S.data);
+  const local = ls.set(PREFIX + S.acct, blob);
+  const remote = await cloudWrite("conta-" + S.acct, { blob, t: Date.now() });
+  if (!local && !remote) toast("Não consegui salvar. Faça um backup na aba Conta.");
+}
+const gabById = (id) => S.data.gabaritos.find((g) => g.id === id);
+const gabByCode = (c) => S.data.gabaritos.find((g) => g.code === c);
+const resultsOf = (id) => S.data.results.filter((r) => r.gabId === id);
+const turmas = () => [...new Set(S.data.results.map((r) => r.turma).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+function newCode() {
+  const used = new Set(S.data.gabaritos.map((g) => g.code));
+  let c; do { c = 1 + Math.floor(Math.random() * 510); } while (used.has(c));
+  return c;
+}
+function grade(g, answers) {
+  let correct = 0;
+  for (let i = 0; i < g.nQ; i++) if (answers[i] === g.key[i]) correct++;
+  return { correct, score: Math.round((correct / g.nQ) * g.points * 10) / 10 };
+}
+function exampleData(user) {
+  const day = 86400000, now = Date.now();
+  const mk = (code, name, keyStr, created) => ({ id: uid(), code, name, subject: "Exemplo para explorar o app", nQ: keyStr.length, nAlt: 5, points: 10, key: keyStr.split("").map((c) => LET.indexOf(c)), created, example: true });
+  const g1 = mk(101, "Exemplo · Ciências 6º ano · Prova 1", "BDACEABDCEBADCEDBACA", now - 40 * day);
+  const g2 = mk(102, "Exemplo · Ciências 6º ano · Prova 2", "CABDEDCABEACBDEBCDAE", now - 12 * day);
+  const names = ["Ana Clara Souza", "Bruno Lima", "Carlos Eduardo Rocha", "Davi Martins", "Eduarda Ferreira", "Felipe Araújo", "Gabriela Nunes", "Heitor Gomes", "Isabela Ribeiro", "João Pedro Alves", "Larissa Costa", "Mateus Oliveira", "Nicole Barbosa", "Rafael Mendes"];
+  let s = 42; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const results = [];
+  [g1, g2].forEach((g, gi) => names.forEach((n, i) => {
+    const skill = 0.38 + ((i * 37) % 14) / 14 * 0.55 + gi * 0.06;
+    const answers = g.key.map((k) => (rnd() < skill ? k : Math.floor(rnd() * 5)));
+    results.push({ id: uid(), gabId: g.id, student: n, turma: "6º B (exemplo)", answers, ...grade(g, answers), created: g.created + day * 2 + i * 60000, example: true });
+  }));
+  return { version: 2, user, prefs: { lastTurma: "" }, gabaritos: [g2, g1], results };
+}
+
+/* ============================================================
+   Cartão-resposta compacto (unidades em mm, tamanho original)
+   Quatro marcadores "alvo" nos cantos, barra de orientação no topo e
+   código binário embaixo. Pode ser colado em qualquer prova do Word,
+   inclusive reduzido: a leitura não depende do tamanho.
+   ============================================================ */
+const BLK = { mk: 9, dx: 6, dy: 7, r: 2.2, gap: 5, numW: 8, bit: 3.6 };
+function blockLayout(nQ, nAlt) {
+  const maxRows = nQ <= 60 ? 15 : 25;
+  const cols = Math.ceil(nQ / maxRows), rows = Math.ceil(nQ / cols);
+  const colW = BLK.numW + nAlt * BLK.dx, gridW = cols * colW + (cols - 1) * BLK.gap;
+  const W = Math.max(gridW + 8, 84), x0 = (W - gridW) / 2, m = BLK.mk / 2;
+  const headY = BLK.mk + 3, y0 = headY + 6.2;
+  const q = [], heads = [];
+  for (let c = 0; c < cols; c++) heads.push(x0 + c * (colW + BLK.gap) + BLK.numW + BLK.dx / 2);
+  for (let i = 0; i < nQ; i++) {
+    const c = Math.floor(i / rows), r = i % rows, cx = x0 + c * (colW + BLK.gap);
+    q.push({ n: i + 1, nx: cx + BLK.numW - 1.6, y: y0 + r * BLK.dy, b: Array.from({ length: nAlt }, (_, a) => cx + BLK.numW + BLK.dx / 2 + a * BLK.dx) });
+  }
+  const lastY = y0 + (rows - 1) * BLK.dy, H = lastY + BLK.r + 3 + BLK.mk;
+  return { q, heads, W, H, m, headY, nAlt, mk: [[m, m], [W - m, m], [W - m, H - m], [m, H - m]] };
+}
+/* posições em coordenadas "unitárias" entre os centros dos marcadores (0..1) */
+const unitBitX = (i) => (i < 6 ? 0.5 - (0.08 + (5 - i) * 0.064) : 0.5 + (0.08 + (i - 6) * 0.064));
+function codeBitsOf(code) { // 9 bits de identificação + 3 de verificação
+  const bits = [];
+  for (let i = 8; i >= 0; i--) bits.push((code >> i) & 1);
+  const chk = bits.reduce((a, b) => a + b, 0) % 8;
+  for (let i = 2; i >= 0; i--) bits.push((chk >> i) & 1);
+  return bits;
+}
+function finderSVG(cx, cy) {
+  const s = BLK.mk, x = cx - s / 2, y = cy - s / 2;
+  return `<path d="M${x} ${y}h${s}v${s}h${-s}z M${x + 1.5} ${y + 1.5}v6h6v-6z" fill="#000" fill-rule="evenodd"/><rect x="${x + 3}" y="${y + 3}" width="3" height="3" fill="#000"/>`;
+}
+const SVGF = 'font-family="Arial, Helvetica, sans-serif"';
+function blockInner(g) {
+  const L = blockLayout(g.nQ, g.nAlt), uw = L.W - 2 * L.m;
+  let s = `<rect width="${L.W}" height="${L.H}" fill="#fff"/>`;
+  for (const [x, y] of L.mk) s += finderSVG(x, y);
+  s += `<rect x="${L.W / 2 - 10}" y="${L.m - 2}" width="20" height="4" fill="#000"/>`;
+  for (const hx of L.heads) for (let a = 0; a < g.nAlt; a++) s += `<text x="${(hx + a * BLK.dx).toFixed(2)}" y="${L.headY + 1.1}" ${SVGF} font-size="3" font-weight="700" text-anchor="middle">${LET[a]}</text>`;
+  for (const q of L.q) {
+    s += `<text x="${q.nx.toFixed(2)}" y="${(q.y + 1.1).toFixed(2)}" ${SVGF} font-size="3" font-weight="700" text-anchor="end">${String(q.n).padStart(2, "0")}</text>`;
+    for (const bx of q.b) s += `<circle cx="${bx.toFixed(2)}" cy="${q.y.toFixed(2)}" r="${BLK.r}" fill="none" stroke="#000" stroke-width="0.28"/>`;
+  }
+  codeBitsOf(g.code).forEach((b, i) => {
+    const x = L.m + unitBitX(i) * uw;
+    if (b) s += `<rect x="${(x - BLK.bit / 2).toFixed(2)}" y="${(L.H - L.m - BLK.bit / 2).toFixed(2)}" width="${BLK.bit}" height="${BLK.bit}" fill="#000"/>`;
+  });
+  return { s, L };
+}
+function blockSVG(g) {
+  const { s, L } = blockInner(g);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.W} ${L.H}" width="${L.W}mm" height="${L.H}mm">${s}</svg>`;
+}
+function pageSVG(g) {
+  const { s, L } = blockInner(g), bx = (210 - L.W) / 2, by = 72;
+  let p = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" width="210mm" height="297mm"><rect width="210" height="297" fill="#fff"/>`;
+  p += `<text x="20" y="25" ${SVGF} font-size="6" font-weight="700">${esc(g.name)}</text>`;
+  p += `<text x="20" y="32" ${SVGF} font-size="3.6" fill="#333">${esc(g.subject || "")}</text>`;
+  p += `<text x="20" y="44" ${SVGF} font-size="3.6">Nome:</text><line x1="33" y1="44.5" x2="190" y2="44.5" stroke="#000" stroke-width="0.25"/>`;
+  p += `<text x="20" y="53" ${SVGF} font-size="3.6">Turma:</text><line x1="34" y1="53.5" x2="90" y2="53.5" stroke="#000" stroke-width="0.25"/>`;
+  p += `<text x="98" y="53" ${SVGF} font-size="3.6">Data:</text><line x1="110" y1="53.5" x2="150" y2="53.5" stroke="#000" stroke-width="0.25"/>`;
+  p += `<text x="105" y="64" ${SVGF} font-size="2.8" fill="#333" text-anchor="middle">Pinte todo o círculo com caneta azul ou preta. Não rasure e não escreva perto dos quadrados pretos.</text>`;
+  p += `<g transform="translate(${bx.toFixed(2)} ${by})">${s}</g>`;
+  p += `<text x="105" y="290" ${SVGF} font-size="2.6" fill="#555" text-anchor="middle">Corretor de Provas · código ${g.code} · ${g.nQ} questões</text>`;
+  return p + `</svg>`;
+}
+async function svgToCanvas(svg, wmm, hmm, pxPerMm) {
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = Math.round(wmm * pxPerMm); c.height = Math.round(hmm * pxPerMm);
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* ============================================================
+   Leitura óptica (OMR)
+   1. acha os 4 marcadores-alvo (quadrado vazado com miolo preto)
+   2. homografia cartão → foto; a barra do topo dá a orientação
+   3. lê o código, escolhe o gabarito e mede a tinta em cada bolha
+   ============================================================ */
+function grayOf(cv) {
+  const w = cv.width, h = cv.height;
+  const d = cv.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const g = new Uint8ClampedArray(w * h);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+  return { g, w, h, rgba: d };
+}
+function findFinders(G, thr = 0.75) {
+  const { g, w, h } = G, n = w * h, W1 = w + 1;
+  const I = new Float64Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += g[y * w + x]; I[(y + 1) * W1 + x + 1] = I[y * W1 + x + 1] + row; } }
+  const R = Math.max(8, Math.round(Math.max(w, h) / 20));
+  const bin = new Uint8Array(n);
+  for (let y = 0; y < h; y++) {
+    const y1 = Math.max(0, y - R), y2 = Math.min(h, y + R + 1);
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - R), x2 = Math.min(w, x + R + 1);
+      const mean = (I[y2 * W1 + x2] - I[y1 * W1 + x2] - I[y2 * W1 + x1] + I[y1 * W1 + x1]) / ((x2 - x1) * (y2 - y1));
+      bin[y * w + x] = g[y * w + x] < mean * thr ? 1 : 0;
+    }
+  }
+  const lab = new Int32Array(n), stack = new Int32Array(n), C = [null];
+  for (let i = 0; i < n; i++) {
+    if (!bin[i] || lab[i]) continue;
+    const id = C.length; let sp = 0; stack[sp++] = i; lab[i] = id;
+    let area = 0, sx = 0, sy = 0, minx = w, maxx = 0, miny = h, maxy = 0;
+    while (sp) {
+      const p = stack[--sp], x = p % w, y = (p - x) / w;
+      area++; sx += x; sy += y;
+      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+      if (x > 0 && bin[p - 1] && !lab[p - 1]) { lab[p - 1] = id; stack[sp++] = p - 1; }
+      if (x < w - 1 && bin[p + 1] && !lab[p + 1]) { lab[p + 1] = id; stack[sp++] = p + 1; }
+      if (y > 0 && bin[p - w] && !lab[p - w]) { lab[p - w] = id; stack[sp++] = p - w; }
+      if (y < h - 1 && bin[p + w] && !lab[p + w]) { lab[p + w] = id; stack[sp++] = p + w; }
+    }
+    C.push({ area, sx, sy, minx, maxx, miny, maxy });
+  }
+  const out = [], solids = [], minA = Math.max(30, n * 0.000015);
+  out.solids = solids; // marcadores borrados viram quadrados cheios: guardados à parte
+  for (let id = 1; id < C.length; id++) {
+    const O = C[id];
+    if (O.area < minA || O.area > n * 0.05) continue;
+    const bw = O.maxx - O.minx + 1, bh = O.maxy - O.miny + 1;
+    if (Math.max(bw, bh) / Math.min(bw, bh) > 1.9) continue;
+    const fill = O.area / (bw * bh);
+    if (fill < 0.2 || fill > 0.85) continue;
+    const cx = O.sx / O.area, cy = O.sy / O.area;
+    const inner = lab[Math.round(cy) * w + Math.round(cx)];
+    if (inner === id) { if (fill > 0.6 && Math.max(bw, bh) / Math.min(bw, bh) < 1.6) solids.push({ x: cx, y: cy, area: O.area }); continue; }
+    if (!inner) continue;
+    const In = C[inner], ratio = In.area / O.area;
+    if (ratio < 0.07 || ratio > 0.65) continue;
+    if (In.minx <= O.minx || In.maxx >= O.maxx || In.miny <= O.miny || In.maxy >= O.maxy) continue;
+    const icx = In.sx / In.area, icy = In.sy / In.area;
+    if (Math.hypot(icx - cx, icy - cy) > 0.18 * Math.max(bw, bh)) continue;
+    out.push({ x: (O.sx + In.sx) / (O.area + In.area), y: (O.sy + In.sy) / (O.area + In.area), area: O.area + In.area });
+  }
+  return out;
+}
+function quadCandidates(c) {
+  const quads = [], seen = new Set();
+  const pool = c.slice().sort((a, b) => b.area - a.area).slice(0, 60);
+  for (const ref of pool) {
+    const S4 = pool.filter((d) => d.area >= ref.area / 3 && d.area <= ref.area * 3);
+    if (S4.length < 4) continue;
+    let tl = S4[0], tr = S4[0], br = S4[0], bl = S4[0];
+    for (const d of S4) {
+      if (d.x + d.y < tl.x + tl.y) tl = d; if (d.x + d.y > br.x + br.y) br = d;
+      if (d.x - d.y > tr.x - tr.y) tr = d; if (d.x - d.y < bl.x - bl.y) bl = d;
+    }
+    const P = [tl, tr, br, bl];
+    if (new Set(P).size < 4) continue;
+    const key = P.map((p) => pool.indexOf(p)).join(",");
+    if (seen.has(key)) continue; seen.add(key);
+    let sign = 0, ok = true, area = 0;
+    const sides = [];
+    for (let i = 0; i < 4; i++) {
+      const a = P[i], b = P[(i + 1) % 4], d = P[(i + 2) % 4];
+      const cr = (b.x - a.x) * (d.y - b.y) - (b.y - a.y) * (d.x - b.x);
+      if (sign === 0) sign = Math.sign(cr); else if (Math.sign(cr) !== sign) ok = false;
+      area += a.x * b.y - b.x * a.y;
+      sides.push(Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    if (!ok || Math.min(...sides) < 0.15 * Math.max(...sides)) continue;
+    quads.push({ P, area: Math.abs(area) / 2 });
+  }
+  return quads.sort((a, b) => b.area - a.area).slice(0, 6);
+}
+function solve(A, b) {
+  const n = b.length;
+  for (let i = 0; i < n; i++) {
+    let m = i; for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[m][i])) m = r;
+    [A[i], A[m]] = [A[m], A[i]]; [b[i], b[m]] = [b[m], b[i]];
+    for (let r = i + 1; r < n; r++) { const f = A[r][i] / A[i][i]; for (let c = i; c < n; c++) A[r][c] -= f * A[i][c]; b[r] -= f * b[i]; }
+  }
+  const x = new Array(n);
+  for (let i = n - 1; i >= 0; i--) { let s = b[i]; for (let c = i + 1; c < n; c++) s -= A[i][c] * x[c]; x[i] = s / A[i][i]; }
+  return x;
+}
+function homography(src, dst) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = src[i], [u, v] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  return [...solve(A, b), 1];
+}
+function applyH(H, x, y) { const w = H[6] * x + H[7] * y + 1; return [(H[0] * x + H[1] * y + H[2]) / w, (H[3] * x + H[4] * y + H[5]) / w]; }
+function sampler(G, H) {
+  return (x, y) => { const [u, v] = applyH(H, x, y); const px = Math.round(u), py = Math.round(v); return px < 0 || py < 0 || px >= G.w || py >= G.h ? 255 : G.g[py * G.w + px]; };
+}
+function meanRect(at, x, y, hw, hh, n = 5) { let s = 0, c = 0; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { s += at(x - hw + (2 * hw * i) / (n - 1), y - hh + (2 * hh * j) / (n - 1)); c++; } return s / c; }
+const DISK = (() => { const o = []; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) if (i * i + j * j <= 5) o.push([i * 0.55, j * 0.55]); return o; })();
+function meanDisk(at, x, y) { let s = 0; for (const [ox, oy] of DISK) s += at(x + ox, y + oy); return s / DISK.length; }
+function pct(arr, p) { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(p * a.length))]; }
+const UNIT = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+function orderQuad(P) { // ordena em volta do centro e confere se é um quadrilátero razoável
+  const cx = P.reduce((a, p) => a + p.x, 0) / 4, cy = P.reduce((a, p) => a + p.y, 0) / 4;
+  const Q = P.slice().sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+  let sign = 0, area = 0; const sides = [];
+  for (let i = 0; i < 4; i++) {
+    const a = Q[i], b = Q[(i + 1) % 4], d = Q[(i + 2) % 4];
+    const cr = (b.x - a.x) * (d.y - b.y) - (b.y - a.y) * (d.x - b.x);
+    if (sign === 0) sign = Math.sign(cr); else if (Math.sign(cr) !== sign) return null;
+    area += a.x * b.y - b.x * a.y; sides.push(Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  if (Math.min(...sides) < 0.15 * Math.max(...sides)) return null;
+  return { P: Q, area: Math.abs(area) / 2 };
+}
+function orient(G, pts, force = false) { // descobre qual canto é o de cima à esquerda pela barra preta
+  let best = null;
+  for (let k = 0; k < 4; k++) {
+    const dst = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]);
+    const at = sampler(G, homography(UNIT, dst));
+    const top = meanRect(at, 0.5, 0, 0.03, 0, 7), bottom = meanRect(at, 0.5, 1, 0.03, 0, 7), score = bottom - top;
+    if ((force || (top < bottom * 0.65 && score > 30)) && (!best || score > best.score)) best = { score, dst };
+  }
+  return best;
+}
+function pickQuad(G, cands, strict = false) {
+  const quads = quadCandidates(cands), seen = new Set(quads.map((q) => q.P.map((p) => cands.indexOf(p)).sort().join()));
+  if (cands.length >= 4 && cands.length <= 14) { // poucas marcas: testa todas as combinações de 4
+    const n = cands.length;
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++) for (let d = c + 1; d < n; d++) {
+      const set = [cands[a], cands[b], cands[c], cands[d]], areas = set.map((p) => p.area);
+      if (Math.max(...areas) > 4 * Math.min(...areas)) continue;
+      const key = [a, b, c, d].join(); if (seen.has(key)) continue; seen.add(key);
+      const q = orderQuad(set); if (q) quads.push(q);
+    }
+  }
+  quads.sort((x, y) => y.area - x.area);
+  let fallback = null;
+  for (const q of quads.slice(0, 60)) {
+    const o = orient(G, q.P.map((p) => [p.x, p.y]));
+    if (!o) continue;
+    const code = readCode(G, o.dst);
+    if (code) return { dst: o.dst, code };
+    if (!fallback && !strict) fallback = { dst: o.dst, code: null };
+  }
+  return fallback;
+}
+function locateBlock(full) {
+  const G = grayOf(full), big = Math.max(full.width, full.height);
+  let most = [], blurry = [];
+  const tried = new Set();
+  for (const [side, thr] of [[1600, 0.75], [1100, 0.75], [2400, 0.75], [1600, 0.62], [1100, 0.85], [800, 0.7]]) {
+    const scale = Math.min(1, side / big), id = scale.toFixed(3) + "/" + thr;
+    if (tried.has(id)) continue; tried.add(id);
+    let gs = G;
+    if (scale < 1) {
+      const sm = document.createElement("canvas");
+      sm.width = Math.round(full.width * scale); sm.height = Math.round(full.height * scale);
+      const sctx = sm.getContext("2d"); sctx.imageSmoothingQuality = "high"; sctx.drawImage(full, 0, 0, sm.width, sm.height);
+      gs = grayOf(sm);
+    }
+    const toFull = (p) => ({ x: (p.x + 0.5) / scale - 0.5, y: (p.y + 0.5) / scale - 0.5, area: p.area / (scale * scale) });
+    const found = findFinders(gs, thr), cands = found.map(toFull);
+    if (cands.length > most.length) most = cands;
+    const hit = pickQuad(G, cands);
+    if (hit) return { G, ...hit, cands };
+    if (thr === 0.75) blurry.push(cands.concat(found.solids.map(toFull)));
+  }
+  for (const c of blurry) { // última tentativa: aceita quadrados cheios, mas só se o código do cartão confirmar
+    const hit = pickQuad(G, c.sort((a, b) => b.area - a.area).slice(0, 40), true);
+    if (hit) return { G, ...hit, cands: c };
+  }
+  return { G, fail: true, cands: most };
+}
+/* refina um toque do professor: procura o marcador-alvo perto do ponto tocado */
+function refinePoint(full, x, y) {
+  const R = Math.round(Math.max(full.width, full.height) * 0.04);
+  const x0 = Math.max(0, Math.round(x - R)), y0 = Math.max(0, Math.round(y - R));
+  const w = Math.min(full.width - x0, 2 * R), h = Math.min(full.height - y0, 2 * R);
+  if (w < 10 || h < 10) return [x, y];
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  c.getContext("2d").drawImage(full, x0, y0, w, h, 0, 0, w, h);
+  let best = null, solid = null;
+  for (const thr of [0.75, 0.62, 0.85]) {
+    const f = findFinders(grayOf(c), thr);
+    for (const p of f) { const d = Math.hypot(p.x + x0 - x, p.y + y0 - y); if (d < R && (!best || d < best.d)) best = { d, x: p.x + x0, y: p.y + y0 }; }
+    for (const p of f.solids) { const d = Math.hypot(p.x + x0 - x, p.y + y0 - y); if (d < R * 0.6 && (!solid || p.area > solid.area)) solid = { area: p.area, x: p.x + x0, y: p.y + y0 }; }
+  }
+  best = best || solid;
+  return best ? [best.x, best.y] : [x, y];
+}
+function readCode(G, dst) {
+  const at = sampler(G, homography(UNIT, dst));
+  const vals = [], gaps = [];
+  for (let i = 0; i < 12; i++) { vals.push(meanRect(at, unitBitX(i), 1, 0.004, 0.004, 3)); gaps.push(at(unitBitX(i) + 0.032, 1)); }
+  const paper = pct(gaps, 0.5), bits = vals.map((v) => (v < paper * 0.65 ? 1 : 0));
+  let code = 0; for (let i = 0; i < 9; i++) code = (code << 1) | bits[i];
+  const chk = (bits[9] << 2) | (bits[10] << 1) | bits[11];
+  return chk === bits.slice(0, 9).reduce((a, b) => a + b, 0) % 8 && code > 0 ? code : null;
+}
+function readBubbles(at, g) {
+  const L = blockLayout(g.nQ, g.nAlt);
+  const means = L.q.map((q) => q.b.map((bx) => meanDisk(at, bx, q.y)));
+  const p75 = pct(means.flat(), 0.75);
+  const answers = [], doubt = [];
+  for (const m of means) {
+    const ref = Math.max(Math.max(...m), p75);
+    const d = m.map((v) => Math.max(0, (ref - v) / ref));
+    const order = d.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
+    const [d0, a0] = order[0], d1 = order[1][0];
+    let ans;
+    if (d0 < 0.22) ans = null;
+    else if (d1 >= 0.22 && d1 > 0.6 * d0) ans = -1;
+    else ans = a0;
+    answers.push(ans);
+    doubt.push((d0 >= 0.13 && d0 < 0.32) || (d1 >= 0.13 && d1 < 0.22) || ans === -1);
+  }
+  return { answers, doubt };
+}
+function rectify(G, H, W, Hh, pxPerMm = 4) {
+  const c = document.createElement("canvas");
+  c.width = Math.round(W * pxPerMm); c.height = Math.round(Hh * pxPerMm);
+  const ctx = c.getContext("2d"), out = ctx.createImageData(c.width, c.height), o = out.data;
+  for (let v = 0; v < c.height; v++) for (let u = 0; u < c.width; u++) {
+    const [x, y] = applyH(H, (u + 0.5) / pxPerMm, (v + 0.5) / pxPerMm);
+    const px = Math.round(x), py = Math.round(y), k = (v * c.width + u) * 4;
+    if (px < 0 || py < 0 || px >= G.w || py >= G.h) { o[k] = o[k + 1] = o[k + 2] = 255; } else { const j = (py * G.w + px) * 4; o[k] = G.rgba[j]; o[k + 1] = G.rgba[j + 1]; o[k + 2] = G.rgba[j + 2]; }
+    o[k + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  return c;
+}
+async function fileToCanvas(file) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch { src = new Image(); src.src = URL.createObjectURL(file); await src.decode(); }
+  const s = Math.min(1, 3000 / Math.max(src.width, src.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(src.width * s); c.height = Math.round(src.height * s);
+  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+/** Corrige uma foto. Devolve {ok:true, gab, answers, doubt, rect} ou {ok:false, reason}. */
+function scanPhoto(canvas, preferId) {
+  const loc = locateBlock(canvas);
+  if (loc.fail) return { ok: false, reason: "markers", cands: loc.cands };
+  return finishScan(loc.G, loc.dst, loc.code, preferId);
+}
+function scanCorners(canvas, pts, preferId) {
+  const G = grayOf(canvas), q = orderQuad(pts.map(([x, y]) => ({ x, y })));
+  if (!q) return { ok: false, reason: "corners" };
+  const o = orient(G, q.P.map((p) => [p.x, p.y]), true);
+  return finishScan(G, o.dst, readCode(G, o.dst), preferId);
+}
+function finishScan(G, dst, code, preferId) {
+  const loc = { G, dst };
+  let gab = code ? gabByCode(code) : null;
+  if (code && !gab) return { ok: false, reason: "unknown", code };
+  if (!gab) gab = preferId && preferId !== "auto" ? gabById(preferId) : null;
+  if (!gab) return { ok: false, reason: "nocode" };
+  const L = blockLayout(gab.nQ, gab.nAlt), H = homography(L.mk, loc.dst);
+  const r = readBubbles(sampler(loc.G, H), gab);
+  return { ok: true, gab, code, ...r, rect: rectify(loc.G, H, L.W, L.H) };
+}
+
+/* Foto de demonstração: uma prova "do Word" com o cartão colado embaixo, fotografada sobre a mesa */
+async function samplePhoto(g, seed = 7, blockScale = 0.8) {
+  let s = seed; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const k = 5, L = blockLayout(g.nQ, g.nAlt);
+  const blk = await svgToCanvas(blockSVG(g), L.W, L.H, k), bctx = blk.getContext("2d");
+  const truth = [];
+  L.q.forEach((q, i) => {
+    let a = rnd() < 0.72 ? g.key[i] : Math.floor(rnd() * g.nAlt);
+    if (i === 4) a = null;
+    const marks = a === null ? [] : [a];
+    if (i === 11) marks.push((a + 2) % g.nAlt);
+    truth.push(marks.length > 1 ? -1 : a);
+    for (const mk of marks) {
+      bctx.fillStyle = "rgba(25,35,120,0.9)"; bctx.beginPath();
+      bctx.ellipse((q.b[mk] + (rnd() - 0.5) * 0.4) * k, (q.y + (rnd() - 0.5) * 0.4) * k, 2.05 * k, 1.9 * k, rnd(), 0, Math.PI * 2); bctx.fill();
+    }
+  });
+  const page = document.createElement("canvas"); page.width = 210 * k; page.height = 297 * k;
+  const p = page.getContext("2d");
+  p.fillStyle = "#fff"; p.fillRect(0, 0, page.width, page.height); p.fillStyle = "#111";
+  p.font = `bold ${6 * k}px Arial`; p.fillText("Escola Municipal Monteiro Lobato", 18 * k, 20 * k);
+  p.font = `${4 * k}px Arial`; p.fillText("Avaliação de Ciências · 6º ano · 2º bimestre", 18 * k, 28 * k);
+  p.fillText("Nome: ", 18 * k, 38 * k);
+  p.fillStyle = "#1f2e86"; p.font = `italic ${5 * k}px 'Comic Sans MS', cursive`; p.fillText("Marina Alves Pereira", 32 * k, 38 * k);
+  p.fillStyle = "#111";
+  const qs = ["Qual é a principal função das raízes de uma planta?", "O que acontece com a água durante a evaporação?", "Qual destes animais é um mamífero?", "A fotossíntese acontece principalmente nas…"];
+  let y = 50;
+  qs.forEach((t, i) => { p.font = `bold ${3.6 * k}px Arial`; p.fillText(`${i + 1}. ${t}`, 18 * k, y * k); p.font = `${3.4 * k}px Arial`; ["a) folhas", "b) raízes", "c) flores", "d) sementes"].forEach((o, j) => { p.fillText("● " + o, 24 * k, (y + 6 + j * 5) * k); }); y += 30; });
+  p.fillStyle = "#3b6e3b"; p.fillRect(140 * k, 48 * k, 50 * k, 34 * k); p.fillStyle = "#e8d44d"; p.beginPath(); p.arc(178 * k, 58 * k, 5 * k, 0, 7); p.fill();
+  const sb = Math.min(blockScale, 105 / L.H, 180 / L.W);
+  p.drawImage(blk, ((210 - L.W * sb) / 2) * k, (178 + (110 - L.H * sb) / 2) * k, L.W * sb * k, L.H * sb * k);
+  const W = 1500, H = 2000, ph = document.createElement("canvas"); ph.width = W; ph.height = H;
+  const c = ph.getContext("2d");
+  const bg = c.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#7a6550"); bg.addColorStop(1, "#5c4a3a");
+  c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(40,25,10,${0.05 + rnd() * 0.08})`; c.fillRect(0, rnd() * H, W, 2 + rnd() * 6); }
+  c.save(); c.translate(W / 2 + 10, H / 2 + 20); c.rotate(-0.045); const sc = (H * 0.9) / page.height; c.scale(sc, sc);
+  c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 30; c.drawImage(page, -page.width / 2, -page.height / 2); c.restore();
+  c.globalCompositeOperation = "multiply";
+  const sh = c.createLinearGradient(0, 0, W, H * 0.7); sh.addColorStop(0, "#ffffff"); sh.addColorStop(1, "#a9a9b4");
+  c.fillStyle = sh; c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over";
+  return { canvas: ph, truth, student: "Marina Alves Pereira" };
+}
+
+/* ============================================================
+   Arquivos (PDF / PNG / CSV / backup)
+   ============================================================ */
+async function saveFile(filename, data) {
+  try {
+    if (window.claude && typeof window.claude.use === "function") {
+      const d = await window.claude.use("downloads");
+      if (!d) { toast("Este visualizador não permite baixar arquivos."); return false; }
+      await d.save({ filename, data });
+      return true;
+    }
+    const blob = data instanceof Blob ? data : new Blob([data]);
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if ((ios || standalone) && navigator.canShare) {
+      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: filename }); return true; }
+        catch (e) { if (e && e.name === "AbortError") return false; }
+      }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return true;
+  } catch (e) {
+    if (e && e.code === "declined") return false;
+    toast("Não foi possível salvar o arquivo.");
+    return false;
+  }
+}
+const slug = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "arquivo";
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(a) { let c = 0xffffffff; for (let i = 0; i < a.length; i++) c = CRC[(c ^ a[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+/* grava 300 dpi no PNG para o Word inserir o cartão no tamanho real */
+async function pngWithDpi(blob, dpi = 300) {
+  const buf = new Uint8Array(await blob.arrayBuffer()), ppm = Math.round(dpi / 0.0254);
+  const ch = new Uint8Array(21), dv = new DataView(ch.buffer);
+  dv.setUint32(0, 9); ch.set([0x70, 0x48, 0x59, 0x73], 4); dv.setUint32(8, ppm); dv.setUint32(12, ppm); ch[16] = 1; dv.setUint32(17, crc32(ch.subarray(4, 17)));
+  return new Blob([buf.subarray(0, 33), ch, buf.subarray(33)], { type: "image/png" });
+}
+async function blockPNG(g) {
+  const L = blockLayout(g.nQ, g.nAlt), cv = await svgToCanvas(blockSVG(g), L.W, L.H, 300 / 25.4);
+  return pngWithDpi(await new Promise((r) => cv.toBlob(r, "image/png")));
+}
+async function pagePDF(g) {
+  const cv = await svgToCanvas(pageSVG(g), 210, 297, 11.8);
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  doc.addImage(cv.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
+  return doc.output("blob");
+}
+
+/* ============================================================
+   Interface: utilidades
+   ============================================================ */
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+function busy(on, msg = "Lendo a folha…") { const b = $("#busy"); b.textContent = msg; b.hidden = !on; }
+function openModal(html, onMount) {
+  const m = $("#modal");
+  m.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  m.hidden = false;
+  m.onclick = (e) => { if (e.target === m) closeModal(); };
+  onMount && onMount(m.firstElementChild);
+  const f = m.querySelector("input, button.primary, button"); f && f.focus();
+}
+function closeModal() { const m = $("#modal"); m.hidden = true; m.innerHTML = ""; }
+function confirmBox(title, text, okLabel, danger = true) {
+  return new Promise((res) => {
+    openModal(`<h2>${esc(title)}</h2><p>${text}</p><div class="actions"><button class="btn" type="button" data-x="no">Cancelar</button><button class="btn ${danger ? "danger" : "primary"}" type="button" data-x="yes">${esc(okLabel)}</button></div>`, (el) => {
+      el.querySelector('[data-x="no"]').onclick = () => { closeModal(); res(false); };
+      el.querySelector('[data-x="yes"]').onclick = () => { closeModal(); res(true); };
+    });
+  });
+}
+function askPassword(title, text) {
+  return new Promise((res) => {
+    openModal(`<h2>${esc(title)}</h2><p class="muted">${text}</p><form class="stack" id="pwf"><label class="field">Senha<input type="password" id="ask-pw" autocomplete="current-password" required></label><div class="actions"><button class="btn" type="button" id="ask-no">Cancelar</button><button class="btn primary" type="submit">Continuar</button></div></form>`, (el) => {
+      el.querySelector("#ask-no").onclick = () => { closeModal(); res(null); };
+      el.querySelector("#pwf").onsubmit = (e) => { e.preventDefault(); const v = el.querySelector("#ask-pw").value; closeModal(); res(v); };
+    });
+  });
+}
+const ICON = {
+  cam: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`,
+  img: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
+  doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14l3 3 3-3"/></svg>`,
+};
+/* dica flutuante para os gráficos (mouse e toque) */
+function showTip(el, x, y) {
+  const t = $("#tip"); t.textContent = el.getAttribute("data-tip"); t.hidden = false;
+  const r = t.getBoundingClientRect();
+  t.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, x - r.width / 2)) + "px";
+  t.style.top = Math.max(8, y - r.height - 12) + "px";
+}
+document.addEventListener("pointermove", (e) => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el) showTip(el, e.clientX, e.clientY); else $("#tip").hidden = true; });
+document.addEventListener("pointerdown", (e) => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el) showTip(el, e.clientX, e.clientY); else $("#tip").hidden = true; });
+window.addEventListener("scroll", () => ($("#tip").hidden = true), { passive: true });
+
+/* ============================================================
+   Login: usuário + senha
+   ============================================================ */
+const LOCK_ART = `<svg class="lock-art" viewBox="0 0 28 28" aria-hidden="true"><g fill="currentColor"><path d="M0 0h8v8H0zM2 2v4h4V2z" fill-rule="evenodd"/><path d="M20 0h8v8h-8zM22 2v4h4V2z" fill-rule="evenodd"/><path d="M0 20h8v8H0zM2 22v4h4v-4z" fill-rule="evenodd"/><path d="M20 20h8v8h-8zM22 22v4h4v-4z" fill-rule="evenodd"/><rect x="3" y="3" width="2" height="2"/><rect x="23" y="3" width="2" height="2"/><rect x="3" y="23" width="2" height="2"/><rect x="23" y="23" width="2" height="2"/><circle cx="11" cy="12" r="2.2"/><circle cx="17" cy="16" r="2.2"/></g><g fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="17" cy="12" r="2.2"/><circle cx="11" cy="16" r="2.2"/></g></svg>`;
+let lockMode = "login";
+function renderLock(msg = "", keep = {}) {
+  $("#app").hidden = true;
+  const L = $("#lock"); L.hidden = false;
+  const isLogin = lockMode === "login";
+  L.innerHTML = `<div class="lock-card">${LOCK_ART}
+    <div class="stack tight"><h1>Corretor de Provas</h1><p class="muted">Corrija provas de múltipla escolha fotografando o cartão-resposta. Cada professor tem sua conta, e os gabaritos só abrem com usuário e senha.</p></div>
+    <div class="seg" role="group" aria-label="Acesso"><button type="button" id="m-login" aria-pressed="${isLogin}">Entrar</button><button type="button" id="m-new" aria-pressed="${!isLogin}">Criar conta</button></div>
+    ${isLogin ? `<form class="stack" id="login-f">
+        <label class="field">Usuário<input type="text" id="lg-user" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${esc(keep.user || ls.get(LAST_USER) || "")}"></label>
+        <label class="field">Senha<input type="password" id="lg-pw" autocomplete="current-password" required></label>
+        ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ""}
+        <button class="btn primary big" type="submit">Entrar</button>
+        <button class="btn quiet" type="button" id="forgot">Esqueci a senha</button>
+      </form>` : `<form class="stack" id="new-f">
+        <label class="field">Seu nome<input type="text" id="nw-name" autocomplete="name" required maxlength="60" value="${esc(keep.name || "")}" placeholder="Ex.: Prof.ª Carla Mendes"></label>
+        <label class="field">Usuário <span class="hint">letras, números, ponto ou traço</span><input type="text" id="nw-user" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="30" value="${esc(keep.user || "")}" placeholder="Ex.: carla.mendes"></label>
+        <label class="field">Senha <span class="hint">mínimo de 8 caracteres</span><input type="password" id="nw-pw" autocomplete="new-password" minlength="8" required></label>
+        <label class="field">Repita a senha<input type="password" id="nw-pw2" autocomplete="new-password" minlength="8" required></label>
+        ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ""}
+        <button class="btn primary big" type="submit">Criar conta</button>
+        <button class="btn quiet" type="button" id="restore">Restaurar um backup</button>
+      </form>`}
+    <p class="small muted" id="store-note">Verificando onde suas contas ficam guardadas…</p>
+  </div>`;
+  cloudReady().then((ok) => { const n = $("#store-note"); if (n) n.textContent = ok ? "Suas contas ficam guardadas com segurança na sua conta Claude: continuam funcionando depois de fechar o app e em outros aparelhos." : IN_CLAUDE ? "Neste acesso, as contas ficam guardadas só neste navegador. Para não perder nada, abra o app logado na sua conta Claude e faça backups." : "Suas contas ficam guardadas neste celular, criptografadas. Faça backups de vez em quando na aba Conta."; });
+  $("#m-login").onclick = () => { lockMode = "login"; renderLock(); };
+  $("#m-new").onclick = () => { lockMode = "new"; renderLock(); };
+  if (isLogin) {
+    $("#login-f").onsubmit = async (e) => {
+      e.preventDefault();
+      const user = $("#lg-user").value, pw = $("#lg-pw").value;
+      if (S.fails >= 3) { busy(true, "Muitas tentativas. Aguarde…"); await sleep(Math.min(30000, 1000 * 2 ** (S.fails - 2))); }
+      busy(true, "Entrando…");
+      try { await login(user, pw); S.fails = 0; busy(false); enterApp(); }
+      catch { S.fails++; busy(false); renderLock("Usuário ou senha incorretos.", { user }); }
+    };
+    $("#forgot").onclick = forgotModal;
+  } else {
+    $("#new-f").onsubmit = async (e) => {
+      e.preventDefault();
+      const name = $("#nw-name").value.trim(), user = $("#nw-user").value.trim(), a = $("#nw-pw").value, b = $("#nw-pw2").value;
+      const keep = { name, user };
+      if (!/^[a-zA-Z0-9._-]{3,30}$/.test(user)) return renderLock("O usuário deve ter de 3 a 30 letras, números, ponto ou traço, sem espaços.", keep);
+      if (a.length < 8) return renderLock("A senha precisa ter pelo menos 8 caracteres.", keep);
+      if (a !== b) return renderLock("As duas senhas não são iguais.", keep);
+      busy(true, "Verificando…");
+      const id = await acctId(user);
+      await cloudReady();
+      if (await vaultBlob(id)) { busy(false); return renderLock("Este usuário já existe. Use a opção Entrar.", keep); }
+      busy(true, "Criando conta…");
+      ls.set(LAST_USER, user);
+      S.acct = id; S.salt = crypto.getRandomValues(new Uint8Array(16)); S.key = await deriveKey(a, S.salt);
+      S.data = exampleData({ name, username: user });
+      await persist();
+      busy(false); enterApp();
+    };
+    $("#restore").onclick = () => { S.importMode = "replace"; $("#file-backup").click(); };
+  }
+  const f = [...L.querySelectorAll("form input")].find((i) => !i.value); f && f.focus();
+}
+async function login(user, pw) {
+  await cloudReady();
+  const id = await acctId(user), blob = await vaultBlob(id);
+  if (blob) {
+    const v = await openVault(blob, pw);
+    Object.assign(S, { acct: id, key: v.key, salt: v.salt, data: v.data });
+    ls.set(LAST_USER, user.trim());
+    if (cloud.db && !(await cloudGet("conta-" + id))) persist(); // conta antiga só do aparelho: copia para a nuvem
+    return;
+  }
+  const legacy = ls.get(LEGACY_KEY); // dados da versão anterior (só senha): passam para este usuário
+  if (!legacy) throw new Error("conta");
+  const v = await openVault(legacy, pw), d = v.data;
+  d.version = 2; d.user = { name: user, username: user }; d.prefs = d.prefs || { lastTurma: "" };
+  Object.assign(S, { acct: id, key: v.key, salt: v.salt, data: d });
+  await persist(); ls.del(LEGACY_KEY);
+}
+function forgotModal() {
+  openModal(`<h2>Esqueceu a senha?</h2>
+    <p>Por segurança, a senha não pode ser recuperada: sem ela ninguém consegue ler os gabaritos, nem você. Se tiver um backup, você pode criar a conta de novo e restaurá-lo.</p>
+    <p class="muted small">Para apagar a conta deste aparelho e começar de novo, digite o usuário abaixo.</p>
+    <label class="field">Usuário<input type="text" id="fg-user" autocapitalize="none" spellcheck="false"></label>
+    <div class="actions"><button class="btn" type="button" id="fg-no">Cancelar</button><button class="btn danger" type="button" id="fg-yes">Apagar esta conta</button></div>`, (el) => {
+    el.querySelector("#fg-no").onclick = closeModal;
+    el.querySelector("#fg-yes").onclick = async () => {
+      const id = await acctId(el.querySelector("#fg-user").value);
+      if (!(await vaultBlob(id))) return toast("Não há conta com esse usuário.");
+      await wipeAccount(id); closeModal(); toast("Conta apagada"); lockMode = "new"; renderLock();
+    };
+  });
+}
+async function wipeAccount(id) {
+  ls.del(PREFIX + id);
+  try { for (const k of await idb.keys(id + ":")) await idb.del(k); } catch {}
+  if (cloud.db) {
+    try { const q = await cloud.db.collection(`data/users/${cloud.uid}`).where("acct", "==", id).get(); for (const d of q.docs) await cloudWrite(d.id, null); } catch (e) { console.warn(e); }
+    await cloudWrite("conta-" + id, null);
+  }
+}
+function logout(reason, mode = "login") {
+  Object.assign(S, { acct: null, key: null, data: null, review: null, edit: null, manual: null, lastPhoto: null, reveal: {} });
+  lockMode = mode; closeModal(); renderLock(reason || "");
+}
+function enterApp() {
+  if (!IN_CLAUDE && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  $("#lock").hidden = true; $("#app").hidden = false; S.lastActive = Date.now();
+  $("#who").textContent = S.data.user ? `${S.data.user.name} · @${S.data.user.username}` : "";
+  render();
+}
+
+/* ============================================================
+   Abas
+   ============================================================ */
+function render() {
+  document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-current", t.dataset.tab === S.tab ? "page" : "false"));
+  $("#tip").hidden = true;
+  const v = $("#view");
+  if (S.tab === "gabaritos") S.edit ? renderEditor(v) : renderGabaritos(v);
+  else if (S.tab === "corrigir") S.review ? renderReview(v) : S.manual ? renderManual(v) : renderScan(v);
+  else if (S.tab === "resultados") renderResults(v);
+  else renderAccount(v);
+}
+function go(tab) { S.tab = tab; window.scrollTo(0, 0); render(); }
+
+/* ---------- Gabaritos ---------- */
+function renderGabaritos(v) {
+  const gs = S.data.gabaritos, hasEx = gs.some((g) => g.example) || S.data.results.some((r) => r.example);
+  v.innerHTML = `<div class="spread"><div class="stack tight"><h1>Gabaritos</h1><p class="muted small">As respostas ficam ocultas até você pedir para ver.</p></div>
+    <button class="btn primary" type="button" id="new-gab">${ICON.plus}Novo gabarito</button></div>
+    ${hasEx ? `<div class="note spread"><span>Os itens marcados como <b>exemplo</b> servem para você conhecer o app.</span><button class="btn sm" type="button" id="del-ex">Apagar exemplos</button></div>` : ""}
+    <div class="list">${gs.length ? gs.map(gabCard).join("") : `<div class="empty">Nenhum gabarito ainda. Toque em <b>Novo gabarito</b> para cadastrar as respostas certas da sua prova.</div>`}</div>`;
+  $("#new-gab").onclick = () => { S.edit = { id: null, name: "", subject: "", nQ: 20, nAlt: 5, points: 10, key: Array(20).fill(null) }; render(); };
+  const dx = $("#del-ex");
+  if (dx) dx.onclick = async () => {
+    if (!(await confirmBox("Apagar exemplos?", "Os gabaritos e resultados de exemplo serão removidos. Seus dados não são afetados.", "Apagar exemplos"))) return;
+    const exIds = new Set(S.data.gabaritos.filter((g) => g.example).map((g) => g.id));
+    for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) deleteImage(r.id);
+    S.data.gabaritos = S.data.gabaritos.filter((g) => !g.example);
+    S.data.results = S.data.results.filter((r) => !r.example && !exIds.has(r.gabId));
+    await persist(); toast("Exemplos apagados"); render();
+  };
+  v.querySelectorAll("[data-act]").forEach((b) => (b.onclick = () => gabAction(b.dataset.act, b.dataset.id)));
+}
+function gabCard(g) {
+  const rs = resultsOf(g.id), avg = rs.length ? rs.reduce((a, r) => a + r.score, 0) / rs.length : null;
+  const shown = S.reveal[g.id];
+  const keyStr = g.key.map((a, i) => `${i + 1}${LET[a]}`).join(" ");
+  return `<article class="panel">
+    <div class="spread"><div class="stack tight"><h2>${esc(g.name)}</h2><p class="muted small">${esc(g.subject || "Sem descrição")}</p></div>
+    <div class="row">${g.example ? `<span class="chip accent">exemplo</span>` : ""}<span class="chip mono">cód. ${g.code}</span></div></div>
+    <div class="row small"><span class="chip">${g.nQ} questões</span><span class="chip">${LET[0]}–${LET[g.nAlt - 1]}</span><span class="chip">vale ${fmtNum(g.points)}</span><span class="chip">${rs.length} corrigida${rs.length === 1 ? "" : "s"}${avg !== null ? ` · média ${fmtNum(avg)}` : ""}</span></div>
+    <div class="keystrip" aria-live="polite">${shown ? esc(keyStr) : "Respostas ocultas · " + "•".repeat(Math.min(g.nQ, 24))}</div>
+    <div class="row">
+      <button class="btn primary" type="button" data-act="scan" data-id="${g.id}">${ICON.cam}Corrigir</button>
+      <button class="btn" type="button" data-act="sheet" data-id="${g.id}">${ICON.doc}Cartão-resposta</button>
+      <button class="btn quiet" type="button" data-act="reveal" data-id="${g.id}">${shown ? "Ocultar" : "Ver"} respostas</button>
+      <button class="btn quiet" type="button" data-act="edit" data-id="${g.id}">Editar</button>
+      <button class="btn quiet" type="button" data-act="del" data-id="${g.id}" style="color:var(--bad)">Excluir</button>
+    </div></article>`;
+}
+async function gabAction(act, id) {
+  const g = gabById(id);
+  if (act === "reveal") { S.reveal[id] = !S.reveal[id]; return render(); }
+  if (act === "edit") { S.edit = JSON.parse(JSON.stringify(g)); return render(); }
+  if (act === "scan") { S.scanGab = id; return go("corrigir"); }
+  if (act === "sheet") return sheetModal(g);
+  if (act === "del") {
+    const rs = resultsOf(id);
+    if (!(await confirmBox("Excluir gabarito?", `“${esc(g.name)}” será apagado${rs.length ? ` junto com ${rs.length} prova${rs.length > 1 ? "s" : ""} corrigida${rs.length > 1 ? "s" : ""}` : ""}. Não dá para desfazer.`, "Excluir"))) return;
+    S.data.gabaritos = S.data.gabaritos.filter((x) => x.id !== id);
+    S.data.results = S.data.results.filter((r) => r.gabId !== id);
+    for (const r of rs) deleteImage(r.id);
+    await persist(); toast("Gabarito excluído"); render();
+  }
+}
+function sheetModal(g) {
+  const L = blockLayout(g.nQ, g.nAlt);
+  openModal(`<h2>Cartão-resposta</h2>
+    <img class="sheet-preview" alt="Cartão-resposta de ${esc(g.name)}" style="width:${Math.min(100, L.W * 1.6)}%" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(blockSVG(g))}">
+    <div class="stack tight small">
+      <p><b>Para usar na sua prova do Word:</b> baixe a imagem e insira em <i>Inserir › Imagens</i>. Ela entra com ${Math.round(L.W)} × ${Math.round(L.H)} mm.</p>
+      <p class="muted">Pode reduzir até uns 70% (puxe pelo canto, sem distorcer). Não corte os quadrados dos cantos e deixe um pouco de espaço em branco em volta. Todas as cópias são reconhecidas pelo código ${g.code}.</p>
+    </div>
+    <div class="actions"><button class="btn" type="button" id="sh-close">Fechar</button><button class="btn" type="button" id="sh-pdf">Folha A4 pronta (PDF)</button><button class="btn primary" type="button" id="sh-png">Imagem para o Word</button></div>`, (el) => {
+    el.querySelector("#sh-close").onclick = closeModal;
+    el.querySelector("#sh-pdf").onclick = async () => {
+      if (!window.jspdf) return toast("O gerador de PDF não carregou. Use a imagem para o Word.");
+      busy(true, "Gerando PDF…"); const b = await pagePDF(g); busy(false);
+      if (await saveFile(`folha-${slug(g.name)}.pdf`, b)) toast("PDF pronto");
+    };
+    el.querySelector("#sh-png").onclick = async () => { busy(true, "Gerando imagem…"); const b = await blockPNG(g); busy(false); if (await saveFile(`cartao-resposta-${slug(g.name)}.png`, b)) toast("Imagem pronta"); };
+  });
+}
+
+/* ---------- Editor de gabarito ---------- */
+function renderEditor(v) {
+  const e = S.edit, locked = e.id && resultsOf(e.id).length > 0;
+  const filled = e.key.filter((a) => a !== null && a !== undefined).length;
+  v.innerHTML = `<div class="spread"><h1>${e.id ? "Editar gabarito" : "Novo gabarito"}</h1><button class="btn quiet" type="button" id="ed-cancel">Cancelar</button></div>
+  <form class="stack" id="ed-form">
+    <div class="panel">
+      <label class="field">Nome da prova<input type="text" id="ed-name" value="${esc(e.name)}" placeholder="Ex.: Matemática 7º ano · Frações" required maxlength="70"></label>
+      <label class="field">Descrição <span class="hint">opcional</span><input type="text" id="ed-sub" value="${esc(e.subject)}" placeholder="Ex.: 2º bimestre" maxlength="80"></label>
+      <div class="grid2">
+        <label class="field">Questões<input type="number" id="ed-nq" min="1" max="100" value="${e.nQ}" ${locked ? "disabled" : ""}></label>
+        <label class="field">Alternativas<select id="ed-na" ${locked ? "disabled" : ""}><option value="4" ${e.nAlt === 4 ? "selected" : ""}>A–D</option><option value="5" ${e.nAlt === 5 ? "selected" : ""}>A–E</option></select></label>
+        <label class="field">Valor da prova<input type="number" id="ed-pts" min="0.5" max="1000" step="0.5" value="${e.points}"></label>
+      </div>
+      ${locked ? `<p class="small muted">Este gabarito já tem provas corrigidas, então o número de questões não pode mudar. Se você alterar respostas, as notas já salvas são recalculadas.</p>` : ""}
+    </div>
+    <div class="panel">
+      <div class="spread"><h2>Respostas certas</h2><span class="chip ${filled === e.nQ ? "ok" : "warn"}" id="ed-count">${filled} de ${e.nQ}</span></div>
+      <div class="row" style="flex-wrap:nowrap"><input type="text" id="ed-quick" placeholder="Digite em sequência, ex.: ABDCE…" autocomplete="off" style="flex:1"><button class="btn" type="button" id="ed-fill">Preencher</button></div>
+      <div class="bubbles" id="ed-grid">${e.key.map((a, i) => `<div class="qrow"><span class="qn">${String(i + 1).padStart(2, "0")}</span>${Array.from({ length: e.nAlt }, (_, k) => `<button type="button" class="bub ${a === k ? "sel" : ""}" data-q="${i}" data-a="${k}" aria-label="Questão ${i + 1}, alternativa ${LET[k]}" aria-pressed="${a === k}">${LET[k]}</button>`).join("")}</div>`).join("")}</div>
+    </div>
+    <button class="btn primary big" type="submit">Salvar gabarito</button>
+  </form>`;
+  const sync = () => { e.name = $("#ed-name").value; e.subject = $("#ed-sub").value; e.points = parseFloat($("#ed-pts").value) || 10; };
+  $("#ed-cancel").onclick = () => { S.edit = null; render(); };
+  const resize = () => {
+    sync();
+    const nQ = Math.max(1, Math.min(100, parseInt($("#ed-nq").value) || 1)), nAlt = parseInt($("#ed-na").value);
+    e.key = Array.from({ length: nQ }, (_, i) => (e.key[i] !== undefined && e.key[i] !== null && e.key[i] < nAlt ? e.key[i] : null));
+    e.nQ = nQ; e.nAlt = nAlt; render();
+  };
+  $("#ed-nq").onchange = resize; $("#ed-na").onchange = resize;
+  $("#ed-fill").onclick = () => {
+    sync();
+    $("#ed-quick").value.toUpperCase().replace(/[^A-E]/g, "").split("").slice(0, e.nQ).forEach((c, i) => { const a = LET.indexOf(c); if (a < e.nAlt) e.key[i] = a; });
+    render();
+  };
+  $("#ed-grid").onclick = (ev) => {
+    const b = ev.target.closest(".bub"); if (!b) return;
+    sync();
+    const q = +b.dataset.q, a = +b.dataset.a;
+    e.key[q] = e.key[q] === a ? null : a;
+    b.parentElement.querySelectorAll(".bub").forEach((x) => { const on = +x.dataset.a === e.key[q]; x.classList.toggle("sel", on); x.setAttribute("aria-pressed", on); });
+    const f = e.key.filter((x) => x !== null).length, chip = $("#ed-count");
+    chip.textContent = `${f} de ${e.nQ}`; chip.className = `chip ${f === e.nQ ? "ok" : "warn"}`;
+  };
+  $("#ed-form").onsubmit = async (ev) => {
+    ev.preventDefault(); sync();
+    if (!e.name.trim()) return toast("Dê um nome para a prova.");
+    const miss = e.key.findIndex((a) => a === null || a === undefined);
+    if (miss >= 0) return toast(`Falta a resposta da questão ${miss + 1}.`);
+    if (e.id) {
+      const i = S.data.gabaritos.findIndex((x) => x.id === e.id);
+      S.data.gabaritos[i] = { ...S.data.gabaritos[i], name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice() };
+      const g = S.data.gabaritos[i];
+      for (const r of resultsOf(g.id)) Object.assign(r, grade(g, r.answers));
+    } else {
+      S.data.gabaritos.unshift({ id: uid(), code: newCode(), name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), created: Date.now() });
+    }
+    await persist(); S.edit = null; toast("Gabarito salvo"); render();
+  };
+}
+
+/* ---------- Corrigir ---------- */
+function renderScan(v) {
+  const gs = S.data.gabaritos;
+  if (S.scanGab !== "auto" && !gabById(S.scanGab)) S.scanGab = "auto";
+  v.innerHTML = `<div class="stack tight"><h1>Corrigir prova</h1><p class="muted">Fotografe o cartão-resposta preenchido pelo aluno. O app reconhece o gabarito pelo código impresso no cartão.</p></div>
+    <div class="panel">
+      <label class="field">Gabarito<select id="sc-gab"><option value="auto">Identificar pelo cartão</option>${gs.map((g) => `<option value="${g.id}" ${S.scanGab === g.id ? "selected" : ""}>${esc(g.name)} (cód. ${g.code})</option>`).join("")}</select></label>
+      <button class="btn primary big" type="button" id="sc-cam">${ICON.cam}Fotografar prova</button>
+      <button class="btn big" type="button" id="sc-gal">${ICON.img}Escolher foto da galeria</button>
+    </div>
+    <div class="panel"><h3>Para uma boa leitura</h3>
+      <ul class="tips small">
+        <li>Os <b>4 quadrados dos cantos do cartão</b> precisam aparecer na foto. Pode fotografar a página inteira ou só o cartão.</li>
+        <li>Deixe a folha plana, em lugar bem iluminado e sem sombra da sua mão.</li>
+        <li>Fotografe de cima. A foto pode estar de lado ou de ponta-cabeça.</li>
+        <li>Questões com duas marcas contam como anuladas. Sempre confira os itens marcados como <b>verificar</b>.</li>
+        <li>Use o cartão gerado nesta versão do app (cantos em forma de alvo). Folhas impressas na versão anterior não são lidas.</li>
+        <li>Se a leitura automática falhar, você pode tocar nos 4 cantos do cartão na foto.</li>
+      </ul>
+    </div>
+    <div class="panel"><div class="spread"><div class="stack tight"><h3>Primeira vez?</h3><p class="small muted">Veja a correção de uma prova simulada, com o cartão colado no fim da página.</p></div>
+      <button class="btn" type="button" id="sc-demo">Testar com prova de exemplo</button></div></div>`;
+  $("#sc-gab").onchange = (e) => (S.scanGab = e.target.value);
+  $("#sc-cam").onclick = () => $("#file-cam").click();
+  $("#sc-gal").onclick = () => $("#file-gal").click();
+  $("#sc-demo").onclick = async () => {
+    const g = S.data.gabaritos.find((x) => x.example) || S.data.gabaritos[0];
+    if (!g) return toast("Cadastre um gabarito primeiro.");
+    busy(true);
+    const s = await samplePhoto(g);
+    await processCanvas(s.canvas, s.student);
+  };
+}
+async function onPhoto(file) {
+  if (!file) return;
+  busy(true);
+  try { await processCanvas(await fileToCanvas(file)); }
+  catch (e) { busy(false); console.error(e); toast("Não consegui abrir esta imagem."); }
+}
+async function processCanvas(canvas, student = "", corners = null) {
+  await sleep(30);
+  S.lastPhoto = canvas; S.lastStudent = student;
+  let res;
+  try { res = corners ? scanCorners(canvas, corners, S.scanGab) : scanPhoto(canvas, S.scanGab); } catch (e) { console.error(e); res = { ok: false, reason: "markers" }; }
+  busy(false);
+  if (!res.ok) return scanError(res, canvas);
+  S.manual = null;
+  const g = res.gab;
+  S.review = { gabId: g.id, answers: res.answers, doubt: res.doubt, rect: res.rect, student, turma: (S.data.prefs && S.data.prefs.lastTurma) || "", resultId: null };
+  if (S.scanGab !== "auto" && S.scanGab !== g.id && res.code) toast(`Cartão identificado: ${g.name}`);
+  S.tab = "corrigir"; window.scrollTo(0, 0); render();
+}
+function previewOf(canvas, cands = []) {
+  const sc = Math.min(1, 520 / Math.max(canvas.width, canvas.height));
+  const c = document.createElement("canvas"); c.width = Math.round(canvas.width * sc); c.height = Math.round(canvas.height * sc);
+  const ctx = c.getContext("2d"); ctx.drawImage(canvas, 0, 0, c.width, c.height);
+  ctx.lineWidth = 3; ctx.strokeStyle = "#E08A00";
+  for (const p of cands) { ctx.beginPath(); ctx.arc(p.x * sc, p.y * sc, Math.max(8, Math.sqrt(p.area) * sc * 0.9), 0, 7); ctx.stroke(); }
+  return c.toDataURL("image/jpeg", 0.8);
+}
+function scanError(res, canvas) {
+  const found = res.cands ? res.cands.length : 0;
+  const msg = {
+    markers: `Não consegui localizar sozinho os 4 quadrados dos cantos do cartão (encontrei ${found}, marcados em laranja abaixo). Você pode tocar nos cantos na foto, ou fotografar de novo mais de perto, com boa luz e a folha plana.`,
+    unknown: `O cartão tem o código ${res.code}, que não corresponde a nenhum gabarito desta conta. Confira se a prova é deste gabarito. Cartões impressos antes desta versão do app precisam ser gerados de novo.`,
+    nocode: "Achei o cartão, mas não consegui ler o código embaixo dele. Escolha o gabarito na lista da tela Corrigir e tente de novo.",
+    corners: "Os 4 pontos marcados não formam um retângulo. Tente marcar de novo, tocando no centro de cada quadrado do canto.",
+  }[res.reason];
+  const canMark = canvas && res.reason !== "unknown";
+  openModal(`<h2>Não deu para corrigir</h2><p>${msg}</p>
+    ${canvas && res.reason === "markers" ? `<img class="sheet-preview" alt="Foto enviada, com as marcas que o app encontrou" src="${previewOf(canvas, res.cands || [])}">` : ""}
+    <div class="actions"><button class="btn" type="button" id="er-close">Fechar</button>
+    <button class="btn" type="button" id="er-again">${ICON.cam}Fotografar de novo</button>
+    ${canMark ? `<button class="btn primary" type="button" id="er-mark">Marcar os cantos</button>` : ""}</div>`, (el) => {
+    el.querySelector("#er-close").onclick = closeModal;
+    el.querySelector("#er-again").onclick = () => { closeModal(); $("#file-cam").click(); };
+    const mk = el.querySelector("#er-mark");
+    if (mk) mk.onclick = () => { closeModal(); S.manual = { canvas, pts: [] }; S.review = null; go("corrigir"); };
+  });
+}
+/* Plano B: o professor toca nos 4 marcadores na foto */
+function renderManual(v) {
+  const M = S.manual;
+  v.innerHTML = `<div class="spread"><div class="stack tight"><span class="eyebrow">Marcar os cantos</span><h1>Toque nos 4 quadrados</h1></div><button class="btn quiet" type="button" id="mn-cancel">Cancelar</button></div>
+    <p class="muted">Toque no centro de cada um dos <b>4 quadrados pretos dos cantos do cartão</b>, em qualquer ordem. O app ajusta o ponto sozinho. Pontos marcados: <b id="mn-count">${M.pts.length}</b> de 4.</p>
+    <div class="row"><span class="small muted">Zoom</span><button class="btn sm" type="button" id="mn-out" aria-label="Reduzir">−</button><span class="mono small" id="mn-z">${Math.round((M.zoom || 1) * 100)}%</span><button class="btn sm" type="button" id="mn-in" aria-label="Ampliar">+</button>
+      <button class="btn sm" type="button" id="mn-undo" ${M.pts.length ? "" : "disabled"}>Desfazer último ponto</button></div>
+    <div class="zoombox" id="mn-box"><canvas id="mn-canvas" style="touch-action:manipulation;cursor:crosshair"></canvas></div>`;
+  const cv = $("#mn-canvas"), sc = Math.min(1, 1400 / Math.max(M.canvas.width, M.canvas.height));
+  cv.width = Math.round(M.canvas.width * sc); cv.height = Math.round(M.canvas.height * sc);
+  const box = $("#mn-box"), setZoom = (z) => {
+    const fx = (box.scrollLeft + box.clientWidth / 2) / (cv.offsetWidth || 1), fy = (box.scrollTop + box.clientHeight / 2) / (cv.offsetHeight || 1);
+    M.zoom = Math.max(1, Math.min(5, z)); cv.style.width = box.clientWidth * M.zoom + "px"; $("#mn-z").textContent = Math.round(M.zoom * 100) + "%";
+    box.scrollLeft = fx * cv.offsetWidth - box.clientWidth / 2; box.scrollTop = fy * cv.offsetHeight - box.clientHeight / 2;
+  };
+  setZoom(M.zoom || 1);
+  $("#mn-in").onclick = () => setZoom((M.zoom || 1) * 1.6);
+  $("#mn-out").onclick = () => setZoom((M.zoom || 1) / 1.6);
+  const draw = () => {
+    const ctx = cv.getContext("2d"); ctx.drawImage(M.canvas, 0, 0, cv.width, cv.height);
+    M.pts.forEach(([x, y], i) => {
+      ctx.fillStyle = "rgba(35,64,196,.9)"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x * sc, y * sc, cv.width / 40, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.round(cv.width / 36)}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(i + 1, x * sc, y * sc);
+    });
+  };
+  draw();
+  cv.onclick = async (e) => {
+    if (M.pts.length >= 4) return;
+    const r = cv.getBoundingClientRect(), x = ((e.clientX - r.left) / r.width) * M.canvas.width, y = ((e.clientY - r.top) / r.height) * M.canvas.height;
+    M.pts.push(refinePoint(M.canvas, x, y)); draw();
+    $("#mn-count").textContent = M.pts.length; $("#mn-undo").disabled = false;
+    if (M.pts.length === 4) { busy(true); await processCanvas(M.canvas, S.lastStudent || "", M.pts.slice()); if (S.manual) { M.pts = []; render(); } }
+  };
+  $("#mn-undo").onclick = () => { M.pts.pop(); $("#mn-count").textContent = M.pts.length; $("#mn-undo").disabled = !M.pts.length; draw(); };
+  $("#mn-cancel").onclick = () => { S.manual = null; render(); };
+}
+function rowState(ans, key) { return ans === null || ans === undefined ? "blank" : ans === -1 ? "multi" : ans === key ? "ok" : "bad"; }
+function renderReview(v) {
+  const R = S.review, g = gabById(R.gabId);
+  if (!g) { S.review = null; return render(); }
+  const { correct, score } = grade(g, R.answers);
+  v.innerHTML = `<div class="spread"><div class="stack tight"><span class="eyebrow">${R.resultId ? `Prova corrigida em ${fmtDate(R.created)}` : "Conferência"}</span><h1>${esc(g.name)}</h1></div>
+    <button class="btn quiet" type="button" id="rv-back">${R.resultId ? "Voltar" : "Descartar"}</button></div>
+    <div class="scan-wrap">
+      <div class="stack">
+        <canvas id="rv-canvas" class="scan-img" ${R.rect ? "" : "hidden"} aria-label="Cartão-resposta lido com as marcas encontradas"></canvas>
+        <p class="small muted" id="rv-noimg" ${R.rect || !R.resultId ? "hidden" : ""}>Carregando a imagem do cartão…</p>
+        <div class="legend"><span><i style="background:#1E9E5A"></i>acerto</span><span><i style="background:#D7263D"></i>erro</span><span><i style="border:2px dashed #1E9E5A"></i>resposta certa</span><span><i style="border:2px solid #E08A00"></i>verificar</span></div>
+      </div>
+      <div class="stack">
+        <div class="panel">
+          <div class="score"><span class="big" id="rv-score">${fmtNum(score)}</span><span class="muted">de ${fmtNum(g.points)} · <b id="rv-correct">${correct}</b> acertos em ${g.nQ}</span></div>
+          <div class="row" id="rv-chips">${chipsHTML(R)}</div>
+          <div class="grid2">
+            <label class="field">Aluno<input type="text" id="rv-name" value="${esc(R.student)}" placeholder="Nome do aluno" maxlength="80" list="dl-alunos"></label>
+            <label class="field">Turma<input type="text" id="rv-turma" value="${esc(R.turma)}" placeholder="Ex.: 7º A" maxlength="30" list="dl-turmas"></label>
+          </div>
+          <datalist id="dl-turmas">${turmas().map((t) => `<option value="${esc(t)}">`).join("")}</datalist>
+          <datalist id="dl-alunos">${[...new Set(S.data.results.filter((r) => !R.turma || r.turma === R.turma).map((r) => r.student))].map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+        </div>
+        <div class="panel">
+          <div class="stack tight"><h3>Respostas lidas</h3><p class="small muted">Toque numa alternativa para corrigir a leitura. O ponto verde indica a resposta certa.</p></div>
+          <div class="bubbles" id="rv-grid">${R.answers.map((a, i) => reviewRow(g, R, i)).join("")}</div>
+        </div>
+        <div class="row">
+          <button class="btn primary" type="button" id="rv-save">${R.resultId ? "Salvar alterações" : "Salvar prova corrigida"}</button>
+          ${R.resultId ? `<button class="btn danger" type="button" id="rv-del">Excluir</button>` : `<button class="btn" type="button" id="rv-next">${ICON.cam}Salvar e fotografar a próxima</button>`}
+        </div>
+      </div>
+    </div>`;
+  if (R.rect) drawOverlay();
+  else if (R.resultId) loadImage(R.resultId).then((c) => {
+    if (S.review !== R) return;
+    if (c) { R.rect = c; $("#rv-canvas").hidden = false; $("#rv-noimg").hidden = true; drawOverlay(); }
+    else $("#rv-noimg").textContent = R.example ? "Os resultados de exemplo não têm imagem do cartão." : "A imagem deste cartão não está salva neste aparelho.";
+  });
+  $("#rv-back").onclick = async () => {
+    if (!R.resultId && !(await confirmBox("Descartar esta correção?", "A leitura deste cartão não será salva.", "Descartar"))) return;
+    const back = R.resultId ? "resultados" : "corrigir"; S.review = null; go(back);
+  };
+  $("#rv-name").oninput = (e) => (R.student = e.target.value);
+  $("#rv-turma").oninput = (e) => (R.turma = e.target.value);
+  $("#rv-grid").onclick = (e) => {
+    const b = e.target.closest(".bub"); if (!b) return;
+    const q = +b.dataset.q, a = +b.dataset.a;
+    R.answers[q] = R.answers[q] === a ? null : a;
+    R.doubt[q] = false;
+    b.closest(".qrow").outerHTML = reviewRow(g, R, q);
+    const gr = grade(g, R.answers);
+    $("#rv-score").textContent = fmtNum(gr.score); $("#rv-correct").textContent = gr.correct;
+    $("#rv-chips").innerHTML = chipsHTML(R);
+    drawOverlay();
+  };
+  const save = async () => {
+    const gr = grade(g, R.answers);
+    const name = R.student.trim() || `Aluno ${resultsOf(g.id).length + 1}`, turma = R.turma.trim();
+    S.data.prefs = { ...(S.data.prefs || {}), lastTurma: turma };
+    let id = R.resultId;
+    if (id) Object.assign(S.data.results.find((r) => r.id === id), { student: name, turma, answers: R.answers.slice(), ...gr, edited: Date.now() });
+    else {
+      id = uid();
+      S.data.results.unshift({ id, gabId: g.id, student: name, turma, answers: R.answers.slice(), ...gr, created: Date.now() });
+      if (R.rect && !(await saveImage(id, R.rect))) toast("A nota foi salva, mas a imagem do cartão não coube no aparelho.");
+    }
+    await persist(); toast(`Salvo: ${name} · ${fmtNum(gr.score)}`);
+  };
+  $("#rv-save").onclick = async () => { await save(); S.review = null; S.resGab = g.id; S.resTurma = R.turma.trim(); go("resultados"); };
+  const next = $("#rv-next");
+  if (next) next.onclick = () => { $("#file-cam").click(); save(); S.review = null; render(); };
+  const del = $("#rv-del");
+  if (del) del.onclick = async () => {
+    if (!(await confirmBox("Excluir prova corrigida?", `A correção de ${esc(R.student)} e a imagem do cartão serão apagadas.`, "Excluir"))) return;
+    S.data.results = S.data.results.filter((r) => r.id !== R.resultId); deleteImage(R.resultId);
+    await persist(); S.review = null; toast("Prova excluída"); go("resultados");
+  };
+}
+function chipsHTML(R) {
+  const blanks = R.answers.filter((a) => a === null).length, multi = R.answers.filter((a) => a === -1).length, doubts = R.doubt.filter(Boolean).length;
+  return (R.resultId ? "" : doubts ? `<span class="chip warn">${doubts} para verificar</span>` : `<span class="chip ok">leitura sem dúvidas</span>`) +
+    (blanks ? `<span class="chip">${blanks} em branco</span>` : "") + (multi ? `<span class="chip bad">${multi} anulada${multi > 1 ? "s" : ""}</span>` : "");
+}
+function reviewRow(g, R, i) {
+  const a = R.answers[i], st = rowState(a, g.key[i]);
+  const flag = R.doubt[i] ? "verificar" : st === "multi" ? "anulada" : st === "blank" ? "branco" : "";
+  return `<div class="qrow st-${st}"><span class="qn">${String(i + 1).padStart(2, "0")}</span>${Array.from({ length: g.nAlt }, (_, k) => `<button type="button" class="bub ${a === k ? "sel" : ""} ${g.key[i] === k ? "key" : ""}" data-q="${i}" data-a="${k}" aria-label="Questão ${i + 1}, alternativa ${LET[k]}${g.key[i] === k ? " (certa)" : ""}" aria-pressed="${a === k}">${LET[k]}</button>`).join("")}${flag ? `<span class="flag">${flag}</span>` : ""}</div>`;
+}
+function drawOverlay() {
+  const R = S.review, cv = $("#rv-canvas"); if (!cv || !R.rect) return;
+  const g = gabById(R.gabId), L = blockLayout(g.nQ, g.nAlt), k = R.rect.width / L.W;
+  cv.width = R.rect.width; cv.height = R.rect.height;
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(R.rect, 0, 0);
+  ctx.lineWidth = Math.max(2, k * 0.55);
+  L.q.forEach((q, i) => {
+    const a = R.answers[i], key = g.key[i];
+    if (R.doubt[i]) { ctx.strokeStyle = "#E08A00"; ctx.setLineDash([]); ctx.strokeRect((q.b[0] - 3.6) * k, (q.y - 3.4) * k, (q.b[g.nAlt - 1] - q.b[0] + 7.2) * k, 6.8 * k); }
+    q.b.forEach((bx, j) => {
+      if (a === j) { ctx.strokeStyle = j === key ? "#1E9E5A" : "#D7263D"; ctx.setLineDash([]); }
+      else if (j === key) { ctx.strokeStyle = "#1E9E5A"; ctx.setLineDash([k * 1.1, k * 0.8]); }
+      else return;
+      ctx.beginPath(); ctx.arc(bx * k, q.y * k, 3 * k, 0, 7); ctx.stroke();
+    });
+  });
+  ctx.setLineDash([]);
+}
+
+/* ---------- Resultados e gráficos ---------- */
+function barPath(x0, y, x1, h, r) { // barra horizontal: ponta arredondada, base reta
+  if (x1 - x0 <= 0.5) return "";
+  r = Math.min(r, x1 - x0, h / 2);
+  return `M${x0} ${y}H${x1 - r}Q${x1} ${y} ${x1} ${y + r}V${y + h - r}Q${x1} ${y + h} ${x1 - r} ${y + h}H${x0}Z`;
+}
+function colPath(x, y0, w, y1, r) { // coluna: topo arredondado, base reta
+  if (y0 - y1 <= 0.5) return "";
+  r = Math.min(r, w / 2, y0 - y1);
+  return `M${x} ${y0}V${y1 + r}Q${x} ${y1} ${x + r} ${y1}H${x + w - r}Q${x + w} ${y1} ${x + w} ${y1 + r}V${y0}Z`;
+}
+function niceTicks(max) {
+  const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : Math.ceil(max / 5 / 10) * 10;
+  const t = []; for (let v = 0; v < max + step - 1e-9; v += step) t.push(v);
+  return t;
+}
+const tickLabel = (v) => fmtNum(v).replace(/,0$/, "");
+function chartWidth() { return Math.max(280, Math.min(846, $("#view").clientWidth - 34)); }
+function studentsChart(rs, g, avg) {
+  const W = chartWidth(), rows = rs.slice().sort((a, b) => b.score - a.score || a.student.localeCompare(b.student, "pt-BR"));
+  const labelW = Math.min(150, W * 0.36), x0 = labelW + 8, x1 = W - 40, rowH = 26, top = 24, H = top + rows.length * rowH + 4;
+  const sx = (v) => x0 + (v / g.points) * (x1 - x0);
+  const short = (n) => (n.length > 20 ? n.slice(0, 19) + "…" : n);
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Nota de cada aluno, da maior para a menor">`;
+  for (const t of niceTicks(g.points).filter((t) => t <= g.points)) s += `<line x1="${sx(t)}" x2="${sx(t)}" y1="${top - 4}" y2="${H - 2}" stroke="var(--grid)" stroke-width="1"/><text x="${sx(t)}" y="${top - 9}" text-anchor="middle">${tickLabel(t)}</text>`;
+  rows.forEach((r, i) => {
+    const y = top + i * rowH, bh = 16, by = y + (rowH - bh) / 2, ty = y + rowH / 2 + 4;
+    s += `<text x="${labelW}" y="${ty}" text-anchor="end" style="fill:var(--ink)">${esc(short(r.student))}</text>`;
+    s += `<path d="${barPath(x0, by, sx(r.score), bh, 4)}" fill="var(--accent)"/>`;
+    s += `<text x="${sx(r.score) + 6}" y="${ty}" style="fill:var(--ink)">${fmtNum(r.score)}</text>`;
+    s += `<rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}" data-tip="${esc(r.student)}${r.turma ? " · " + esc(r.turma) : ""}: nota ${fmtNum(r.score)} (${r.correct} de ${g.nQ} acertos)"/>`;
+  });
+  s += `<line x1="${sx(avg)}" x2="${sx(avg)}" y1="${top - 2}" y2="${H - 2}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  return s + `</svg>`;
+}
+function histChart(rs, g) {
+  const W = chartWidth(), H = 220, left = 30, right = W - 8, top = 18, base = H - 30, bins = 10;
+  const counts = Array(bins).fill(0);
+  for (const r of rs) counts[Math.min(bins - 1, Math.floor((r.score / g.points) * bins + 1e-9))]++;
+  const ticks = niceTicks(Math.max(...counts, 1)), maxT = ticks[ticks.length - 1];
+  const slot = (right - left) / bins, bw = Math.min(24, slot - 4), sy = (c) => base - (c / maxT) * (base - top);
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Quantos alunos ficaram em cada faixa de nota">`;
+  for (const t of ticks) s += `<line x1="${left}" x2="${right}" y1="${sy(t)}" y2="${sy(t)}" stroke="var(--grid)" stroke-width="1"/><text x="${left - 6}" y="${sy(t) + 4}" text-anchor="end">${t}</text>`;
+  counts.forEach((c, i) => {
+    const x = left + i * slot + (slot - bw) / 2, a = (g.points * i) / bins, b = (g.points * (i + 1)) / bins;
+    if (c) s += `<path d="${colPath(x, base, bw, sy(c), 4)}" fill="var(--accent)"/>`;
+    s += `<rect class="hit" x="${left + i * slot}" y="${top}" width="${slot}" height="${base - top}" data-tip="Notas de ${fmtNum(a)} até ${i < bins - 1 ? "menos de " : ""}${fmtNum(b)}: ${c} aluno${c === 1 ? "" : "s"}"/>`;
+  });
+  s += `<line x1="${left}" x2="${right}" y1="${base}" y2="${base}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  const every = W < 420 ? 2 : 1;
+  for (let i = 0; i <= bins; i += every) s += `<text x="${left + i * slot}" y="${base + 18}" text-anchor="middle">${tickLabel((g.points * i) / bins)}</text>`;
+  return s + `</svg>`;
+}
+function evolutionData(turma) {
+  return S.data.gabaritos.map((g) => {
+    const rs = resultsOf(g.id).filter((r) => !turma || r.turma === turma);
+    if (!rs.length) return null;
+    return { g, n: rs.length, avg10: rs.reduce((a, r) => a + (r.score / g.points) * 10, 0) / rs.length, date: Math.min(...rs.map((r) => r.created)) };
+  }).filter(Boolean).sort((a, b) => a.date - b.date);
+}
+function evolutionChart(pts) {
+  const W = chartWidth(), H = 220, left = 30, right = W - 24, top = 24, base = H - 30;
+  const sx = (i) => left + 16 + (i / Math.max(1, pts.length - 1)) * (right - left - 32), sy = (v) => base - (v / 10) * (base - top);
+  const line = pts.map((p, i) => `${sx(i)} ${sy(p.avg10)}`).join("L");
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Média da turma em cada prova, na escala de 0 a 10">`;
+  for (const t of [0, 2, 4, 6, 8, 10]) s += `<line x1="${left}" x2="${right}" y1="${sy(t)}" y2="${sy(t)}" stroke="var(--grid)" stroke-width="1"/><text x="${left - 6}" y="${sy(t) + 4}" text-anchor="end">${t}</text>`;
+  s += `<path d="M${line}L${sx(pts.length - 1)} ${base}L${sx(0)} ${base}Z" fill="var(--accent)" opacity="0.1"/>`;
+  s += `<path d="M${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p, i) => {
+    s += `<circle cx="${sx(i)}" cy="${sy(p.avg10)}" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+    s += `<text x="${sx(i)}" y="${base + 18}" text-anchor="middle">P${i + 1}</text>`;
+    s += `<circle class="hit" cx="${sx(i)}" cy="${sy(p.avg10)}" r="18" data-tip="P${i + 1} · ${esc(p.g.name)} (${fmtShort(p.date)}): média ${fmtNum(p.avg10)} de 10 · ${p.n} prova${p.n > 1 ? "s" : ""}"/>`;
+  });
+  const last = pts[pts.length - 1];
+  s += `<text x="${sx(pts.length - 1)}" y="${sy(last.avg10) - 12}" text-anchor="middle" style="fill:var(--ink);font-weight:700">${fmtNum(last.avg10)}</text>`;
+  return s + `</svg>`;
+}
+async function exportChart(id, filename) {
+  const box = $(`#${id}`), svg = box && box.querySelector("svg"); if (!svg) return;
+  const css = getComputedStyle(document.documentElement), tok = (v) => css.getPropertyValue(v).trim();
+  const W = +svg.getAttribute("width"), H = +svg.getAttribute("height"), title = box.dataset.title || "";
+  let src = svg.outerHTML.replace(/<(rect|circle) class="hit"[^>]*>(<\/\1>)?/g, "").replace(/var\((--[a-z-]+)\)/g, (_, v) => tok(v));
+  src = src.replace(/<text(?![^>]*style=)/g, `<text fill="${tok("--muted")}"`).replace(/style="fill:([^;"]+)/g, 'fill="$1" style="');
+  const pad = 20, th = title ? 30 : 0;
+  const wrap = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + pad * 2}" height="${H + pad * 2 + th}" font-family="Arial, Helvetica, sans-serif" font-size="12"><rect width="100%" height="100%" fill="${tok("--surface")}"/>${title ? `<text x="${pad}" y="${pad + 14}" font-size="16" font-weight="700" fill="${tok("--ink")}">${esc(title)}</text>` : ""}<g transform="translate(${pad} ${pad + th})">${src.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')}</g></svg>`;
+  const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(wrap); await img.decode();
+  const c = document.createElement("canvas"); c.width = (W + pad * 2) * 2; c.height = (H + pad * 2 + th) * 2;
+  const ctx = c.getContext("2d"); ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
+  const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+  if (await saveFile(filename, blob)) toast("Gráfico pronto");
+}
+function renderResults(v) {
+  const gs = S.data.gabaritos.filter((g) => resultsOf(g.id).length);
+  if (!gs.length) {
+    v.innerHTML = `<h1>Resultados</h1><div class="empty">Nenhuma prova corrigida ainda. As notas e os gráficos aparecem aqui depois que você salvar uma correção.<br><br><button class="btn primary" type="button" id="rs-go">${ICON.cam}Corrigir uma prova</button></div>`;
+    $("#rs-go").onclick = () => go("corrigir"); return;
+  }
+  if (!gs.find((g) => g.id === S.resGab)) S.resGab = gs[0].id;
+  const g = gabById(S.resGab), all = resultsOf(g.id);
+  const ts = [...new Set(all.map((r) => r.turma).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  if (S.resTurma && !ts.includes(S.resTurma)) S.resTurma = "";
+  const rs = all.filter((r) => !S.resTurma || r.turma === S.resTurma).sort((a, b) => a.student.localeCompare(b.student, "pt-BR"));
+  const scores = rs.map((r) => r.score), avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const perQ = g.key.map((k, i) => rs.filter((r) => r.answers[i] === k).length / rs.length);
+  const evo = evolutionData(S.resTurma), label = S.resTurma || "todas as turmas";
+  v.innerHTML = `<div class="spread"><h1>Resultados</h1><button class="btn sm" type="button" id="rs-csv">Exportar planilha</button></div>
+    <div class="filters">
+      <label class="field">Prova<select id="rs-gab">${gs.map((x) => `<option value="${x.id}" ${x.id === g.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
+      <label class="field">Turma<select id="rs-turma"><option value="">Todas as turmas</option>${ts.map((t) => `<option value="${esc(t)}" ${t === S.resTurma ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>${rs.length}</b><span>provas corrigidas</span></div>
+      <div class="stat"><b>${fmtNum(avg)}</b><span>média (de ${fmtNum(g.points)})</span></div>
+      <div class="stat"><b>${fmtNum(Math.max(...scores))}</b><span>maior nota</span></div>
+      <div class="stat"><b>${fmtNum(Math.min(...scores))}</b><span>menor nota</span></div>
+    </div>
+    <div class="panel"><div class="spread"><div class="stack tight"><h3>Notas da turma</h3><p class="small muted">Da maior para a menor. A linha tracejada marca a média (${fmtNum(avg)}).</p></div><button class="btn sm" type="button" data-exp="ch-alunos">Baixar gráfico</button></div>
+      <div class="chart" id="ch-alunos" data-title="Notas · ${esc(g.name)} · ${esc(label)}">${studentsChart(rs, g, avg)}</div></div>
+    <div class="panel"><div class="spread"><div class="stack tight"><h3>Distribuição das notas</h3><p class="small muted">Quantos alunos ficaram em cada faixa de nota. Toque numa coluna para ver o número.</p></div><button class="btn sm" type="button" data-exp="ch-dist">Baixar gráfico</button></div>
+      <div class="chart" id="ch-dist" data-title="Distribuição das notas · ${esc(g.name)} · ${esc(label)}">${histChart(rs, g)}</div></div>
+    <div class="panel"><div class="spread"><div class="stack tight"><h3>Evolução da turma</h3><p class="small muted">Média de ${esc(label)} em cada prova, convertida para 0 a 10.</p></div>${evo.length > 1 ? `<button class="btn sm" type="button" data-exp="ch-evo">Baixar gráfico</button>` : ""}</div>
+      ${evo.length > 1 ? `<div class="chart" id="ch-evo" data-title="Evolução · ${esc(label)}">${evolutionChart(evo)}</div><div class="keylist">${evo.map((p, i) => `<span><b>P${i + 1}</b> ${esc(p.g.name)} · ${fmtShort(p.date)}</span>`).join("")}</div>` : `<p class="small muted">O gráfico aparece quando a turma tiver pelo menos duas provas corrigidas.</p>`}</div>
+    <div class="panel"><div class="stack tight"><h3>Provas corrigidas</h3><p class="small muted">Toque num aluno para ver o cartão lido e as respostas.</p></div><div class="table-wrap"><table>
+      <thead><tr><th>Aluno</th><th>Turma</th><th class="num">Acertos</th><th class="num">Nota</th><th class="num">Data</th></tr></thead>
+      <tbody>${rs.map((r) => `<tr class="click" data-id="${r.id}" tabindex="0"><td>${esc(r.student)}</td><td class="muted">${esc(r.turma || "–")}</td><td class="num">${r.correct}/${g.nQ}</td><td class="num"><b>${fmtNum(r.score)}</b></td><td class="num muted">${fmtDate(r.created)}</td></tr>`).join("")}</tbody>
+    </table></div></div>
+    <div class="panel"><div class="stack tight"><h3>Acertos por questão</h3><p class="small muted">Em vermelho, questões que menos da metade acertou: bons pontos para revisar em aula.</p></div>
+      <div class="qbars">${perQ.map((p, i) => `<div class="qbar ${p < 0.5 ? "low" : ""}" data-tip="Questão ${i + 1}: ${Math.round(p * 100)}% de acerto (resposta ${LET[g.key[i]]})"><b>${String(i + 1).padStart(2, "0")}</b> ${Math.round(p * 100)}%<div class="fill" style="width:${Math.round(p * 100)}%"></div></div>`).join("")}</div></div>`;
+  $("#rs-gab").onchange = (e) => { S.resGab = e.target.value; render(); };
+  $("#rs-turma").onchange = (e) => { S.resTurma = e.target.value; render(); };
+  v.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => exportChart(b.dataset.exp, `grafico-${b.dataset.exp.slice(3)}-${slug(g.name)}.png`)));
+  const open = (id) => { const r = S.data.results.find((x) => x.id === id); S.review = { gabId: r.gabId, answers: r.answers.slice(), doubt: r.answers.map(() => false), rect: null, student: r.student, turma: r.turma || "", resultId: r.id, created: r.created, example: r.example }; go("corrigir"); };
+  v.querySelectorAll("tr.click").forEach((tr) => { tr.onclick = () => open(tr.dataset.id); tr.onkeydown = (e) => { if (e.key === "Enter") open(tr.dataset.id); }; });
+  $("#rs-csv").onclick = () => {
+    const head = ["Aluno", "Turma", "Acertos", "Nota", "Data", ...g.key.map((_, i) => `Q${i + 1}`)];
+    const lines = [head, ...rs.map((r) => [r.student, r.turma || "", r.correct, fmtNum(r.score), fmtDate(r.created), ...r.answers.map(letter)])];
+    const csv = "﻿" + lines.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    saveFile(`notas-${slug(g.name)}${S.resTurma ? "-" + slug(S.resTurma) : ""}.csv`, csv).then((ok) => ok && toast("Planilha pronta"));
+  };
+}
+let resizeT, lastW = 0;
+window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { const w = $("#view").clientWidth; if (S.key && S.tab === "resultados" && w !== lastW) { lastW = w; render(); } }, 200); });
+
+/* ---------- Conta ---------- */
+function renderAccount(v) {
+  const u = S.data.user || {};
+  v.innerHTML = `<div class="stack tight"><h1>${esc(u.name || "Minha conta")}</h1><p class="muted">Usuário <b>@${esc(u.username || "")}</b> · ${S.data.gabaritos.length} gabarito(s) · ${S.data.results.length} prova(s) corrigida(s)</p></div>
+    <div class="panel"><h3>Como seus dados são protegidos</h3>
+      <ul class="tips small">
+        <li>Gabaritos, notas e imagens dos cartões ficam <b>criptografados (AES-256)</b> com uma chave gerada a partir da sua senha, e só então são guardados ${cloud.db ? "na sua conta Claude (funciona depois de fechar o app e em outros aparelhos)" : "neste navegador"}.</li>
+        <li>A senha nunca é gravada. Sem usuário e senha, os dados são ilegíveis, inclusive para quem pegar o celular.</li>
+        <li>Cada professor que usa este aparelho tem a sua conta, separada das outras.</li>
+        <li>O app sai sozinho após ${AUTOLOCK_MIN} minutos sem uso. Toque em <b>Sair</b> antes de emprestar o aparelho.</li>
+        <li>As fotos são lidas no próprio celular. Só a imagem do cartão já criptografada é guardada.</li>
+      </ul>
+    </div>
+    <div class="panel"><h3>Backup</h3>
+      <p class="small muted">O backup reúne gabaritos, notas e imagens dos cartões num arquivo criptografado, que só abre com a senha em uso quando você o gerou. Guarde-o no seu e-mail ou Drive para não perder nada se trocar de celular.</p>
+      <div class="row"><button class="btn primary" type="button" id="sx-exp">Baixar backup</button><button class="btn" type="button" id="sx-imp">Restaurar backup</button></div>
+    </div>
+    <div class="panel"><h3>Trocar senha</h3>
+      <form class="stack" id="sx-pw">
+        <label class="field">Senha atual<input type="password" id="sx-old" autocomplete="current-password" required></label>
+        <div class="grid2"><label class="field">Nova senha<input type="password" id="sx-new" autocomplete="new-password" minlength="8" required></label>
+        <label class="field">Repita a nova senha<input type="password" id="sx-new2" autocomplete="new-password" minlength="8" required></label></div>
+        <div><button class="btn" type="submit">Trocar senha</button></div>
+      </form>
+    </div>
+    <div class="panel"><h3>Apagar conta</h3><p class="small muted">Remove esta conta, com todos os gabaritos, notas e imagens, deste aparelho.</p><div><button class="btn danger" type="button" id="sx-wipe">Apagar minha conta</button></div></div>`;
+  $("#sx-exp").onclick = async () => {
+    busy(true, "Preparando backup…");
+    const images = {};
+    for (const r of S.data.results) { try { const bytes = await imageBytes(r.id); if (bytes) images[r.id] = b64(bytes); } catch {} }
+    const blob = await sealVault(S.key, S.salt, { ...S.data, images });
+    busy(false);
+    if (await saveFile(`backup-corretor-${slug((S.data.user && S.data.user.username) || "conta")}-${new Date().toISOString().slice(0, 10)}.json`, blob)) toast("Backup pronto");
+  };
+  $("#sx-imp").onclick = () => { S.importMode = "merge"; $("#file-backup").click(); };
+  $("#sx-pw").onsubmit = async (e) => {
+    e.preventDefault();
+    const o = $("#sx-old").value, n = $("#sx-new").value, n2 = $("#sx-new2").value;
+    try { await openVault(await vaultBlob(S.acct), o); } catch { return toast("A senha atual está errada."); }
+    if (n.length < 8) return toast("A nova senha precisa ter 8 caracteres ou mais.");
+    if (n !== n2) return toast("As novas senhas não são iguais.");
+    busy(true, "Trocando senha…");
+    const oldKey = S.key, salt = crypto.getRandomValues(new Uint8Array(16)), key = await deriveKey(n, salt);
+    for (const r of S.data.results) { try { const bytes = await imageBytes(r.id, oldKey); if (bytes) await putImageEnc(r.id, await encBytes(key, bytes)); } catch {} }
+    S.salt = salt; S.key = key; await persist();
+    busy(false); toast("Senha trocada. Backups antigos continuam com a senha antiga."); render();
+  };
+  $("#sx-wipe").onclick = async () => {
+    if (!(await confirmBox("Apagar sua conta?", "Todos os gabaritos, notas e imagens desta conta serão apagados deste aparelho. Sem backup, não há como recuperar.", "Apagar conta"))) return;
+    await wipeAccount(S.acct); logout("", "new");
+  };
+}
+async function onBackupFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  const pw = await askPassword("Restaurar backup", "Digite a senha que estava em uso quando este backup foi gerado.");
+  if (pw === null) return;
+  busy(true, "Abrindo backup…");
+  let v;
+  try { v = await openVault(text, pw); } catch { busy(false); return toast("Senha errada ou arquivo que não é um backup do Corretor."); }
+  const { images = {}, ...data } = v.data;
+  if (S.importMode === "replace" || !S.data) {
+    const user = data.user && data.user.username;
+    if (!user) { busy(false); return toast("Este backup é de uma versão antiga. Crie uma conta e use Restaurar backup na aba Conta."); }
+    Object.assign(S, { acct: await acctId(user), key: v.key, salt: v.salt, data: { ...data, version: 2 } });
+    for (const [rid, b] of Object.entries(images)) await putImageEnc(rid, await encBytes(S.key, unb64(b))).catch(() => {});
+    await persist(); busy(false); toast(`Backup restaurado. Seu usuário é @${user}.`); return enterApp();
+  }
+  let ng = 0, nr = 0;
+  for (const g of data.gabaritos || []) if (!gabById(g.id)) { if (gabByCode(g.code)) g.code = newCode(); S.data.gabaritos.push(g); ng++; }
+  for (const r of data.results || []) if (!S.data.results.find((x) => x.id === r.id)) {
+    S.data.results.push(r); nr++;
+    if (images[r.id]) await putImageEnc(r.id, await encBytes(S.key, unb64(images[r.id]))).catch(() => {});
+  }
+  await persist(); busy(false); toast(`Restaurados: ${ng} gabarito(s) e ${nr} prova(s)`); render();
+}
+
+/* ============================================================
+   Início
+   ============================================================ */
+document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => { if (S.review && S.review.resultId) S.review = null; S.edit = null; if (t.dataset.tab !== "corrigir") S.manual = null; go(t.dataset.tab); }));
+$("#btn-lock").onclick = () => logout();
+$("#file-cam").onchange = (e) => { onPhoto(e.target.files[0]); e.target.value = ""; };
+$("#file-gal").onchange = (e) => { onPhoto(e.target.files[0]); e.target.value = ""; };
+$("#file-backup").onchange = (e) => { onBackupFile(e.target.files[0]); e.target.value = ""; };
+["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => (S.lastActive = Date.now()), { passive: true }));
+setInterval(() => { if (S.key && Date.now() - S.lastActive > AUTOLOCK_MIN * 60000) logout("Você saiu por inatividade. Entre de novo para continuar."); }, 20000);
+renderLock();
+</script>
