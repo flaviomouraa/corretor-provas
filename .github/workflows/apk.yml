@@ -1,3 +1,4 @@
+# Compila o APK Android e publica em Releases (corretor-de-provas.apk).
 name: Gerar APK
 
 on:
