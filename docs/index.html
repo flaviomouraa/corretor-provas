@@ -852,6 +852,12 @@ async function saveFile(filename, data) {
       return true;
     }
     const blob = data instanceof Blob ? data : new Blob([data]);
+    if (window.AndroidBridge) { // app Android: salva em Downloads
+      const ext = filename.split(".").pop().toLowerCase();
+      const mime = { pdf: "application/pdf", png: "image/png", csv: "text/csv", json: "application/json" }[ext] || blob.type || "application/octet-stream";
+      const b64str = b64(await blob.arrayBuffer());
+      return window.AndroidBridge.saveFile(filename, b64str, mime) !== "error";
+    }
     const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     if ((ios || standalone) && navigator.canShare) {
@@ -1663,7 +1669,7 @@ renderLock();
 </script>
 
 <script>
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !window.AndroidBridge) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 </script>

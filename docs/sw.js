@@ -1,5 +1,5 @@
 // Service worker do Corretor de Provas: guarda o app no celular para abrir sem internet.
-const CACHE = "corretor-d4d15f8c3f";
+const CACHE = "corretor-cfce9f138c";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "vendor/jspdf.umd.min.js", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {

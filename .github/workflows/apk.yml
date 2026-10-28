@@ -1,0 +1,45 @@
+name: Gerar APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["index.html", "docs/**", "android/**", ".github/workflows/apk.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Chave de assinatura (segredo ANDROID_KEYSTORE_B64)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p android/keystore
+          if [ -n "$KS" ]; then echo "$KS" | base64 -d > android/keystore/corretor.jks; fi
+
+      - name: Compilar
+        working-directory: android
+        env:
+          CORRETOR_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../corretor-de-provas.apk
+
+      - name: Publicar o APK em Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Corretor de Provas (APK ${{ github.run_number }})
+          body: Baixe o arquivo corretor-de-provas.apk no celular Android e abra para instalar.
+          files: corretor-de-provas.apk

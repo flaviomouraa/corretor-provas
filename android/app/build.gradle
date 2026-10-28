@@ -1,0 +1,53 @@
+plugins {
+    id "com.android.application"
+}
+
+// Chave de assinatura: android/keystore/corretor.jks (fora do git) ou variáveis de ambiente no GitHub Actions.
+def ksFile = rootProject.file(System.getenv("CORRETOR_KEYSTORE") ?: "keystore/corretor.jks")
+def ksPass = System.getenv("CORRETOR_KEYSTORE_PASS") ?: (rootProject.file("keystore/senha.txt").exists() ? rootProject.file("keystore/senha.txt").text.trim() : "")
+
+android {
+    namespace "br.com.corretordeprovas"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "br.com.corretordeprovas"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword ksPass
+                keyAlias "corretor"
+                keyPassword ksPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ksFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    sourceSets {
+        // o app web publicado (docs/) vai dentro do APK
+        main.assets.srcDirs = ["../../docs"]
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.12.1"
+    implementation "androidx.core:core:1.13.1"
+}

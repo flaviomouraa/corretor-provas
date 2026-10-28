@@ -14,7 +14,7 @@ src = src.replace('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5
 assert "vendor/jspdf" in src
 
 register = """<script>
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !window.AndroidBridge) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 </script>"""
