@@ -38,6 +38,7 @@
   --bad-soft: #FBE0E3;
   --warn: #A55F00;
   --warn-soft: #FDEBCF;
+  --seq1: #C9D3FA; --seq2: #8FA2EE; --seq3: #5470DA; --seq4: #1F37A8;
   --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -48,6 +49,7 @@
     --bg: #0E1320; --surface: #161D2D; --sunk: #1D2538; --ink: #E7EBF3; --muted: #9AA4BA; --grid: #232C40;
     --line: #283149; --line-strong: #4A5672; --accent: #8EA2FF; --accent-ink: #0E1320; --accent-soft: #23305E;
     --ok: #4FC98D; --ok-soft: #133426; --bad: #FF7A85; --bad-soft: #3C1A20; --warn: #F2AE55; --warn-soft: #3A2A12;
+    --seq1: #2B3B7A; --seq2: #4862C8; --seq3: #7C93F5; --seq4: #BAC8FF;
     color-scheme: dark;
   }
 }
@@ -55,8 +57,10 @@
   --bg: #0E1320; --surface: #161D2D; --sunk: #1D2538; --ink: #E7EBF3; --muted: #9AA4BA; --grid: #232C40;
   --line: #283149; --line-strong: #4A5672; --accent: #8EA2FF; --accent-ink: #0E1320; --accent-soft: #23305E;
   --ok: #4FC98D; --ok-soft: #133426; --bad: #FF7A85; --bad-soft: #3C1A20; --warn: #F2AE55; --warn-soft: #3A2A12;
-  color-scheme: dark;
+  --seq1: #2B3B7A; --seq2: #4862C8; --seq3: #7C93F5; --seq4: #BAC8FF;
+    color-scheme: dark;
 }
+*, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; }
@@ -109,7 +113,8 @@ label.field .hint { font-weight: 400; color: var(--muted); }
 input[type=text], input[type=password], input[type=number], select {
   min-height: 46px; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--line-strong); background: var(--surface); width: 100%; min-width: 0; }
 input:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.grid2 > * { min-width: 0; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .list { display: flex; flex-direction: column; gap: 10px; }
@@ -123,6 +128,10 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .note { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; font-size: 0.875rem; }
 
 .bubbles { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 4px 18px; }
+.bubbles.vertical { grid-template-columns: minmax(0, 1fr); max-width: 380px; gap: 4px; }
+.bubbles.vertical .qrow { border-bottom: 1px solid var(--line); border-radius: 0; padding-block: 5px; }
+.bubbles.vertical .qrow:last-child { border-bottom: 0; }
+.qrow { flex-wrap: nowrap; }
 .qrow { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 8px; }
 .qrow .qn { font-family: var(--font-mono); width: 2.2em; text-align: right; color: var(--muted); font-size: 0.9rem; }
 .qrow.st-ok { background: var(--ok-soft); }
@@ -1164,7 +1173,7 @@ function renderEditor(v) {
     <div class="panel">
       <div class="spread"><h2>Respostas certas</h2><span class="chip ${filled === e.nQ ? "ok" : "warn"}" id="ed-count">${filled} de ${e.nQ}</span></div>
       <div class="row" style="flex-wrap:nowrap"><input type="text" id="ed-quick" placeholder="Digite em sequência, ex.: ABDCE…" autocomplete="off" style="flex:1"><button class="btn" type="button" id="ed-fill">Preencher</button></div>
-      <div class="bubbles" id="ed-grid">${e.key.map((a, i) => `<div class="qrow"><span class="qn">${String(i + 1).padStart(2, "0")}</span>${Array.from({ length: e.nAlt }, (_, k) => `<button type="button" class="bub ${a === k ? "sel" : ""}" data-q="${i}" data-a="${k}" aria-label="Questão ${i + 1}, alternativa ${LET[k]}" aria-pressed="${a === k}">${LET[k]}</button>`).join("")}</div>`).join("")}</div>
+      <div class="bubbles vertical" id="ed-grid">${e.key.map((a, i) => `<div class="qrow"><span class="qn">${String(i + 1).padStart(2, "0")}</span>${Array.from({ length: e.nAlt }, (_, k) => `<button type="button" class="bub ${a === k ? "sel" : ""}" data-q="${i}" data-a="${k}" aria-label="Questão ${i + 1}, alternativa ${LET[k]}" aria-pressed="${a === k}">${LET[k]}</button>`).join("")}</div>`).join("")}</div>
     </div>
     <button class="btn primary big" type="submit">Salvar gabarito</button>
   </form>`;
@@ -1488,6 +1497,53 @@ function histChart(rs, g) {
   for (let i = 0; i <= bins; i += every) s += `<text x="${left + i * slot}" y="${base + 18}" text-anchor="middle">${tickLabel((g.points * i) / bins)}</text>`;
   return s + `</svg>`;
 }
+function pieData(rs, g, mode) {
+  if (mode === "respostas") {
+    let ok = 0, bad = 0, blank = 0, multi = 0;
+    for (const r of rs) r.answers.forEach((a, i) => { if (a === null || a === undefined) blank++; else if (a === -1) multi++; else if (a === g.key[i]) ok++; else bad++; });
+    return { unit: ["resposta", "respostas"], slices: [
+      { label: "Certas", value: ok, color: "var(--ok)" },
+      { label: "Erradas", value: bad, color: "var(--bad)" },
+      { label: "Em branco", value: blank, color: "var(--line-strong)" },
+      { label: "Anuladas (2 marcas)", value: multi, color: "var(--warn)" },
+    ] };
+  }
+  const p = g.points, cuts = [0.5, 0.7, 0.9].map((f) => p * f), counts = [0, 0, 0, 0];
+  for (const r of rs) counts[r.score < cuts[0] ? 0 : r.score < cuts[1] ? 1 : r.score < cuts[2] ? 2 : 3]++;
+  const below = (v) => fmtNum(Math.round((v - 0.1) * 10) / 10);
+  return { unit: ["aluno", "alunos"], slices: [
+    { label: `Abaixo de ${fmtNum(cuts[0])}`, value: counts[0], color: "var(--seq1)" },
+    { label: `${fmtNum(cuts[0])} a ${below(cuts[1])}`, value: counts[1], color: "var(--seq2)" },
+    { label: `${fmtNum(cuts[1])} a ${below(cuts[2])}`, value: counts[2], color: "var(--seq3)" },
+    { label: `${fmtNum(cuts[2])} a ${fmtNum(p)}`, value: counts[3], color: "var(--seq4)" },
+  ] };
+}
+function pieChart({ slices, unit }) {
+  const W = chartWidth(), total = slices.reduce((a, b) => a + b.value, 0) || 1, side = W >= 440;
+  const R = side ? Math.min(105, (W - 230) / 2) : Math.min(110, W / 2 - 12), cx = R + 6, cy = R + 6;
+  const lx = side ? cx * 2 + 24 : 4, ly = side ? Math.max(14, cy - (slices.length * 30) / 2 + 10) : cy * 2 + 26;
+  const H = side ? cy * 2 + 12 : ly + slices.length * 30 + 4;
+  const pcx = side ? cx : W / 2;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de pizza: ${slices.map((x) => `${x.label} ${x.value}`).join(", ")}">`;
+  let a0 = -Math.PI / 2;
+  const nonzero = slices.filter((x) => x.value > 0);
+  for (const sl of slices) {
+    if (!sl.value) continue;
+    const pct = sl.value / total, tip = `${sl.label}: ${sl.value} ${unit[sl.value === 1 ? 0 : 1]} (${Math.round(pct * 100)}%)`;
+    if (nonzero.length === 1) { s += `<circle cx="${pcx}" cy="${cy}" r="${R}" fill="${sl.color}" data-tip="${esc(tip)}"/>`; break; }
+    const a1 = a0 + pct * Math.PI * 2, large = a1 - a0 > Math.PI ? 1 : 0;
+    const x0 = pcx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0), x1 = pcx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+    s += `<path d="M${pcx} ${cy}L${x0.toFixed(2)} ${y0.toFixed(2)}A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z" fill="${sl.color}" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round" data-tip="${esc(tip)}"/>`;
+    a0 = a1;
+  }
+  slices.forEach((sl, i) => {
+    const y = ly + i * 30, pct = Math.round((sl.value / total) * 100);
+    s += `<circle cx="${lx + 7}" cy="${y}" r="6" fill="${sl.color}"/>`;
+    s += `<text x="${lx + 20}" y="${y + 4}" style="fill:var(--ink)">${esc(sl.label)}</text>`;
+    s += `<text x="${Math.min(W - 4, lx + 270)}" y="${y + 4}" text-anchor="end" style="fill:var(--ink);font-weight:700">${sl.value} · ${pct}%</text>`;
+  });
+  return s + `</svg>`;
+}
 function evolutionData(turma) {
   return S.data.gabaritos.map((g) => {
     const rs = resultsOf(g.id).filter((r) => !turma || r.turma === turma);
@@ -1555,6 +1611,9 @@ function renderResults(v) {
       <div class="chart" id="ch-alunos" data-title="Notas · ${esc(g.name)} · ${esc(label)}">${studentsChart(rs, g, avg)}</div></div>
     <div class="panel"><div class="spread"><div class="stack tight"><h3>Distribuição das notas</h3><p class="small muted">Quantos alunos ficaram em cada faixa de nota. Toque numa coluna para ver o número.</p></div><button class="btn sm" type="button" data-exp="ch-dist">Baixar gráfico</button></div>
       <div class="chart" id="ch-dist" data-title="Distribuição das notas · ${esc(g.name)} · ${esc(label)}">${histChart(rs, g)}</div></div>
+    <div class="panel"><div class="spread"><div class="stack tight"><h3>Gráfico de pizza</h3><p class="small muted">${S.pieMode === "respostas" ? "Todas as respostas dadas pela turma nesta prova." : "Quantos alunos ficaram em cada faixa de nota."} Toque numa fatia para ver o número.</p></div><button class="btn sm" type="button" data-exp="ch-pizza">Baixar gráfico</button></div>
+      <div class="seg" role="group" aria-label="O que o gráfico mostra" style="max-width:360px"><button type="button" id="pz-faixas" aria-pressed="${S.pieMode !== "respostas"}">Notas por faixa</button><button type="button" id="pz-resp" aria-pressed="${S.pieMode === "respostas"}">Tipo de resposta</button></div>
+      <div class="chart" id="ch-pizza" data-title="${S.pieMode === "respostas" ? "Respostas" : "Notas por faixa"} · ${esc(g.name)} · ${esc(label)}">${pieChart(pieData(rs, g, S.pieMode))}</div></div>
     <div class="panel"><div class="spread"><div class="stack tight"><h3>Evolução da turma</h3><p class="small muted">Média de ${esc(label)} em cada prova, convertida para 0 a 10.</p></div>${evo.length > 1 ? `<button class="btn sm" type="button" data-exp="ch-evo">Baixar gráfico</button>` : ""}</div>
       ${evo.length > 1 ? `<div class="chart" id="ch-evo" data-title="Evolução · ${esc(label)}">${evolutionChart(evo)}</div><div class="keylist">${evo.map((p, i) => `<span><b>P${i + 1}</b> ${esc(p.g.name)} · ${fmtShort(p.date)}</span>`).join("")}</div>` : `<p class="small muted">O gráfico aparece quando a turma tiver pelo menos duas provas corrigidas.</p>`}</div>
     <div class="panel"><div class="stack tight"><h3>Provas corrigidas</h3><p class="small muted">Toque num aluno para ver o cartão lido e as respostas.</p></div><div class="table-wrap"><table>
@@ -1565,6 +1624,9 @@ function renderResults(v) {
       <div class="qbars">${perQ.map((p, i) => `<div class="qbar ${p < 0.5 ? "low" : ""}" data-tip="Questão ${i + 1}: ${Math.round(p * 100)}% de acerto (resposta ${LET[g.key[i]]})"><b>${String(i + 1).padStart(2, "0")}</b> ${Math.round(p * 100)}%<div class="fill" style="width:${Math.round(p * 100)}%"></div></div>`).join("")}</div></div>`;
   $("#rs-gab").onchange = (e) => { S.resGab = e.target.value; render(); };
   $("#rs-turma").onchange = (e) => { S.resTurma = e.target.value; render(); };
+  const keepScroll = (fn) => () => { const y = window.scrollY; fn(); render(); window.scrollTo(0, y); };
+  $("#pz-faixas").onclick = keepScroll(() => (S.pieMode = "faixas"));
+  $("#pz-resp").onclick = keepScroll(() => (S.pieMode = "respostas"));
   v.querySelectorAll("[data-exp]").forEach((b) => (b.onclick = () => exportChart(b.dataset.exp, `grafico-${b.dataset.exp.slice(3)}-${slug(g.name)}.png`)));
   const open = (id) => { const r = S.data.results.find((x) => x.id === id); S.review = { gabId: r.gabId, answers: r.answers.slice(), doubt: r.answers.map(() => false), rect: null, student: r.student, turma: r.turma || "", resultId: r.id, created: r.created, example: r.example }; go("corrigir"); };
   v.querySelectorAll("tr.click").forEach((tr) => { tr.onclick = () => open(tr.dataset.id); tr.onkeydown = (e) => { if (e.key === "Enter") open(tr.dataset.id); }; });
