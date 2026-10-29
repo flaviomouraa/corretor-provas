@@ -8,12 +8,12 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 |---|---|---|
 | APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.4 (versionCode 7), com sincronização, sem zoom, cores, letras nas bolinhas e 4 formatos de cartão |
 | Site instalável / iPhone | https://flaviomouraa.github.io/corretor-provas/ | gerado de `docs/`; Pages **ativo** (confirmado em 29/10/2026) |
-| Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | versão 4, capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
+| Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | versão 7 (mesmo código da 1.4), capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
 | Código | https://github.com/flaviomouraa/corretor-provas (público, ramo `main`) | |
 
 ## Pendências
 
-- **Sincronização entre aparelhos**: **funcionando com o servidor real** desde 29/10/2026 (conta `flavio.moura` criada no site pelo PC, aba Conta mostrou "ativa"). Foi preciso desligar "Confirm email" e apagar o usuário pendente no Supabase. Falta o professor entrar no celular (APK 1.2.1) com a mesma conta e trazer os dados antigos do celular pelo backup (Conta → Restaurar backup, que junta).
+- **Sincronização entre aparelhos**: **funcionando com o servidor real** desde 29/10/2026 (conta `flavio.moura` criada no site pelo PC, aba Conta mostrou "ativa"). Foi preciso desligar "Confirm email" e apagar o usuário pendente no Supabase. Falta confirmar que o professor entrou no celular com a mesma conta (Entrar, não Criar conta) e, se havia dados antigos só no celular, trouxe pelo backup (Conta → Restaurar backup, que junta).
 - **Chave de assinatura permanente do APK**: ainda não configurada. Os segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` não existem; cada build sai com chave de depuração descartável. A chave gerada na sessão original (`android/keystore/`) estava fora do git e pode ter se perdido: se não existir, gere outra com `keytool` (alias `corretor`) e guie o professor a criar os dois segredos. Oferecido ao professor em 28/10/2026, sem resposta ainda.
 - **Teste em aparelho real**: o APK e a leitura com fotos reais ainda não foram confirmados pelo professor. Se ele mandar uma foto que falhou, siga "Quando a leitura falha numa foto real" no SKILL.md.
 
@@ -28,10 +28,11 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 7. Transformar o trabalho numa **skill** (esta) e mantê-la atualizada.
 8. Versão 1.1: campos do cadastro não podem se sobrepor; **gabarito todo na vertical** ao marcar as respostas certas; **gráfico de pizza** em Resultados (notas por faixa / tipo de resposta).
 9. "Gostei bastante do app": manter o visual e o funcionamento atuais.
+10. Abrir o app no **computador** com os mesmos dados do celular → escolheu a opção de **sincronização própria** (Supabase, dados cifrados no aparelho).
 11. 1.3: o app "dava zoom" em alguns momentos no celular → zoom desligado; opção de **mudar a cor do app** (6 cores + automático/claro/escuro, na aba Conta).
 12. 1.3.1: **letras clarinhas dentro das bolinhas** do cartão-resposta, para facilitar a marcação dos alunos.
 13. 1.4: **formato do cartão à escolha** no cadastro do gabarito (Colunas, Uma coluna, Horizontal, Blocos de 5), com prévia.
-10. Abrir o app no **computador** com os mesmos dados do celular → escolheu a opção de **sincronização própria** (Supabase, dados cifrados no aparelho).
+14. "Gostei bastante do resultado" (29/10/2026, sobre a 1.4): aprovou os 4 formatos, as cores e as letras nas bolinhas. Mantenha esse padrão de entrega (veja "Como entregar uma versão" no SKILL.md).
 
 ## Funcionalidades atuais (resumo)
 

@@ -1,6 +1,6 @@
 ---
 name: corretor-provas
-description: Manter e evoluir o app "Corretor de Provas" (correção de provas de múltipla escolha por foto do cartão-resposta, com login criptografado, gráficos da turma, versão instalável/PWA, APK Android e página publicada no Claude). Use esta skill sempre que o pedido envolver este app ou este repositório, mesmo sem citar o nome, por exemplo, "a leitura não funcionou com a minha foto", "mudar o cartão-resposta", "adicionar um campo/gráfico/relatório", "gerar o APK de novo", "publicar a nova versão", "o login sumiu", "o professor quer…", "corrigir provas pela câmera", "gabarito", "OMR".
+description: Manter e evoluir o app "Corretor de Provas" (correção de provas de múltipla escolha por foto do cartão-resposta em 4 formatos, login criptografado, sincronização entre celular/PC/iPhone, gráficos da turma, cores do app, versão instalável/PWA, APK Android e página publicada no Claude). Use esta skill sempre que o pedido envolver este app ou este repositório, mesmo sem citar o nome, por exemplo, "a leitura não funcionou com a minha foto", "mudar o cartão-resposta", "adicionar um campo/gráfico/relatório", "gerar o APK de novo", "publicar a nova versão", "o login sumiu", "o professor quer…", "corrigir provas pela câmera", "gabarito", "OMR".
 ---
 
 # Corretor de Provas
@@ -39,6 +39,14 @@ O mesmo `index.html` roda em três lugares, e o código detecta onde está:
 5. Faça commit. Nunca envie `android/keystore/`.
 
 Antes de entregar, olhe a tela: tire um screenshot com Playwright (largura 400px, claro e escuro) das telas que mudaram.
+
+## Como entregar uma versão (o professor aprovou este jeito)
+
+1. Testes passando (os dois scripts) e screenshots conferidos. Se mudou o cartão, mande ao professor uma **imagem do cartão** (ou dos formatos lado a lado) gerada com `svgToCanvas(blockSVG(g), …)`.
+2. Suba `versionCode`/`versionName`, rode `python3 tools/build_pwa.py`, atualize `references/estado-atual.md` e faça commit + push (mensagem em português, dizendo o que mudou). Mudanças só de documentação levam `[skip ci]` para não gerar APK.
+3. Espere o APK **da sua commit** (filtre por `head_sha`; o `releases/latest` pode ainda ser o anterior), baixe, confira que contém a mudança (`unzip -p … assets/index.html | grep …`) e mande com SendUserFile.
+4. Republique o Artifact (`index.html`, mesmas capacidades) para o link no Claude ficar igual.
+5. Responda curto: o que mudou (em tópicos), o que foi testado (com números), o que muda para ele e como instalar (Sincronizar agora → desinstalar → instalar → **Entrar** com a mesma conta).
 
 ## Regras que não podem quebrar
 

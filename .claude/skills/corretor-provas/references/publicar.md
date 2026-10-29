@@ -52,4 +52,9 @@ Para acompanhar a compilação daqui (API pública, sem login):
 curl -s https://api.github.com/repos/flaviomouraa/corretor-provas/actions/runs   # status do "Gerar APK"
 curl -s https://api.github.com/repos/flaviomouraa/corretor-provas/releases/latest # link do APK
 ```
+Para esperar a compilação **da commit que você acabou de enviar** (o `releases/latest` pode ainda ser o anterior por alguns segundos):
+```bash
+SHA=$(git rev-parse HEAD)
+curl -s "https://api.github.com/repos/flaviomouraa/corretor-provas/actions/runs?head_sha=$SHA"   # repita até status=completed
+```
 O workflow tem filtro de pastas: um push que não muda `index.html`, `docs/`, `android/` ou o próprio workflow não gera APK. Baixe o APK da release e mande ao professor com SendUserFile.
