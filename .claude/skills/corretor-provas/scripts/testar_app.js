@@ -117,6 +117,15 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
         out.push({ name: "marcação manual dos cantos (toques imprecisos)", ok: r.ok && r.answers.every((a, i) => a === s.truth[i]), why: r.ok ? "" : r.reason });
       }
     }
+    // formatos de cartão (Uma coluna, Horizontal, Blocos de 5): tamanhos variados e fotos ruins
+    let cod = 450;
+    for (const [modo, tamanhos] of [["vertical", [8, 20, 35]], ["horizontal", [7, 20, 50, 100]], ["blocos", [8, 20, 50, 100]]]) for (const nQ of tamanhos) for (const nAlt of [4, 5]) {
+      const g = mkG(nQ, nAlt, cod++); g.layout = modo;
+      const L = layoutDe(g);
+      if (L.W > 190 || L.H > 275) { out.push({ name: `formato ${modo} ${nQ}q: cabe numa folha A4`, ok: false, why: `${Math.round(L.W)}×${Math.round(L.H)} mm` }); continue; }
+      const s = await samplePhoto(g, 5 + nQ, 0.8);
+      run(`formato ${modo}, ${nQ} questões ${LET[0]}–${LET[nAlt - 1]}`, nQ % 2 ? degrade(s.canvas, { blur: 1.5, noise: 30 }) : s.canvas, s.truth, g.id);
+    }
     S.data.gabaritos = S.data.gabaritos.filter((g) => !String(g.id).startsWith("t"));
     const blank = document.createElement("canvas"); blank.width = 1000; blank.height = 1300;
     const bc = blank.getContext("2d"); bc.fillStyle = "#fff"; bc.fillRect(0, 0, 1000, 1300); bc.fillStyle = "#000"; bc.font = "40px Arial";

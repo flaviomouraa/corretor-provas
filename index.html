@@ -170,6 +170,12 @@ tr.click:hover td { background: var(--sunk); }
 .seg button { border: 0; background: transparent; border-radius: 999px; min-height: 40px; font-weight: 700; color: var(--muted); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .err { color: var(--bad); font-weight: 700; font-size: 0.9rem; }
+.formatos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.formato { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; }
+.formato span { font-size: 0.8rem; color: var(--muted); }
+.formato[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.formato[disabled] { opacity: .5; cursor: not-allowed; }
+.formato-previa { max-height: 340px; width: auto; }
 .seg.tres { grid-template-columns: repeat(3, 1fr); max-width: 420px; }
 .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .cor { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; cursor: pointer; }
@@ -676,21 +682,56 @@ function exampleData(user) {
    inclusive reduzido: a leitura não depende do tamanho.
    ============================================================ */
 const BLK = { mk: 9, dx: 6, dy: 7, r: 2.2, gap: 5, numW: 8, bit: 3.6 };
-function blockLayout(nQ, nAlt) {
-  const maxRows = nQ <= 60 ? 15 : 25;
-  const cols = Math.ceil(nQ / maxRows), rows = Math.ceil(nQ / cols);
-  const colW = BLK.numW + nAlt * BLK.dx, gridW = cols * colW + (cols - 1) * BLK.gap;
-  const W = Math.max(gridW + 8, 84), x0 = (W - gridW) / 2, m = BLK.mk / 2;
-  const headY = BLK.mk + 3, y0 = headY + 6.2;
-  const q = [], heads = [];
-  for (let c = 0; c < cols; c++) heads.push(x0 + c * (colW + BLK.gap) + BLK.numW + BLK.dx / 2);
-  for (let i = 0; i < nQ; i++) {
-    const c = Math.floor(i / rows), r = i % rows, cx = x0 + c * (colW + BLK.gap);
-    q.push({ n: i + 1, nx: cx + BLK.numW - 1.6, y: y0 + r * BLK.dy, b: Array.from({ length: nAlt }, (_, a) => cx + BLK.numW + BLK.dx / 2 + a * BLK.dx) });
+/* Formatos do cartão. "colunas" é o original: NÃO mude a geometria dele (cartões já impressos dependem disso). */
+const FORMATOS = {
+  colunas: { nome: "Colunas", desc: "Colunas de até 15 questões lado a lado (padrão)." },
+  vertical: { nome: "Uma coluna", desc: "Todas as questões uma embaixo da outra.", max: 35 },
+  horizontal: { nome: "Horizontal", desc: "Questões lado a lado, com A–E embaixo de cada número." },
+  blocos: { nome: "Blocos de 5", desc: "Blocos de 5 questões, um ao lado do outro." },
+};
+const formatoDe = (g) => (FORMATOS[g.layout] && !(FORMATOS[g.layout].max < g.nQ) ? g.layout || "colunas" : "colunas");
+/* devolve tudo em mm: questões (número, centros das bolinhas, caixa da questão), letras de cabeçalho, molduras e marcadores */
+function blockLayout(nQ, nAlt, modo = "colunas") {
+  const { dx, dy, numW, gap, r } = BLK, m = BLK.mk / 2, top = BLK.mk + 3;
+  const q = [], heads = [], frames = [];
+  const linha = (n, x, y) => ({ n, num: { x: x + numW - 1.6, y, anchor: "end" }, pts: Array.from({ length: nAlt }, (_, a) => [x + numW + dx / 2 + a * dx, y]), box: [x + numW - 0.6, y - 3.4, nAlt * dx + 1.2, 6.8] });
+  let W, bottom;
+  if (modo === "horizontal") {
+    const per = nQ <= 10 ? nQ : nQ <= 40 ? 10 : 20, qdx = 7.5, lw = 6, lines = Math.ceil(nQ / per), lineH = 6 + nAlt * dx + 5;
+    const cw = lw + per * qdx; W = Math.max(cw + 8, 84);
+    const x0 = (W - cw) / 2;
+    for (let l = 0; l < lines; l++) for (let a = 0; a < nAlt; a++) heads.push({ x: x0 + lw / 2, y: top + l * lineH + 6 + dx / 2 + a * dx, t: LET[a] });
+    for (let i = 0; i < nQ; i++) {
+      const l = Math.floor(i / per), x = x0 + lw + (i % per) * qdx + qdx / 2, y0 = top + l * lineH;
+      q.push({ n: i + 1, num: { x, y: y0 + 2.2, anchor: "middle" }, pts: Array.from({ length: nAlt }, (_, a) => [x, y0 + 6 + dx / 2 + a * dx]), box: [x - 3.4, y0 + 5.4, 6.8, nAlt * dx + 1.2] });
+    }
+    bottom = top + (lines - 1) * lineH + 6 + nAlt * dx;
+  } else if (modo === "blocos") {
+    const nb = Math.ceil(nQ / 5), per = nb <= 2 ? nb : nb <= 4 ? 2 : nb <= 9 ? 3 : 4, bw = numW + nAlt * dx, bh = 6.2 + 5 * dy, gx = per >= 4 ? 4.5 : 7, gy = 6;
+    // as molduras ficam a pelo menos 2,5 mm dos marcadores (não podem encostar neles)
+    const cw = per * bw + (per - 1) * gx; W = Math.max(cw + 2 * (BLK.mk + 2.5), 84);
+    const x0 = (W - cw) / 2, top2 = top + 2.5;
+    for (let b = 0; b < nb; b++) {
+      const bx = x0 + (b % per) * (bw + gx), by = top2 + Math.floor(b / per) * (bh + gy), rowsHere = Math.min(5, nQ - b * 5);
+      frames.push([bx + 1, by - 3, bw + 1, 6.2 + rowsHere * dy + 1.2]);
+      for (let a = 0; a < nAlt; a++) heads.push({ x: bx + numW + dx / 2 + a * dx, y: by, t: LET[a] });
+      for (let k = 0; k < rowsHere; k++) q.push(linha(b * 5 + k + 1, bx, by + 6.2 + k * dy));
+    }
+    bottom = Math.max(...q.map((x) => x.pts[0][1])) + r + 2.5;
+  } else { // "colunas" (original) e "vertical" (uma coluna só)
+    const maxRows = modo === "vertical" ? nQ : nQ <= 60 ? 15 : 25;
+    const cols = Math.ceil(nQ / maxRows), rows = Math.ceil(nQ / cols);
+    const colW = numW + nAlt * dx, gridW = cols * colW + (cols - 1) * gap;
+    W = Math.max(gridW + 8, 84);
+    const x0 = (W - gridW) / 2, y0 = top + 6.2;
+    for (let c = 0; c < cols; c++) for (let a = 0; a < nAlt; a++) heads.push({ x: x0 + c * (colW + gap) + numW + dx / 2 + a * dx, y: top, t: LET[a] });
+    for (let i = 0; i < nQ; i++) q.push(linha(i + 1, x0 + Math.floor(i / rows) * (colW + gap), y0 + (i % rows) * dy));
+    bottom = y0 + (rows - 1) * dy + r;
   }
-  const lastY = y0 + (rows - 1) * BLK.dy, H = lastY + BLK.r + 3 + BLK.mk;
-  return { q, heads, W, H, m, headY, nAlt, mk: [[m, m], [W - m, m], [W - m, H - m], [m, H - m]] };
+  const H = bottom + 3 + BLK.mk;
+  return { q, heads, frames, W, H, m, nAlt, mk: [[m, m], [W - m, m], [W - m, H - m], [m, H - m]] };
 }
+const layoutDe = (g) => blockLayout(g.nQ, g.nAlt, formatoDe(g));
 /* posições em coordenadas "unitárias" entre os centros dos marcadores (0..1) */
 const unitBitX = (i) => (i < 6 ? 0.5 - (0.08 + (5 - i) * 0.064) : 0.5 + (0.08 + (i - 6) * 0.064));
 function codeBitsOf(code) { // 9 bits de identificação + 3 de verificação
@@ -708,16 +749,17 @@ const SVGF = 'font-family="Arial, Helvetica, sans-serif"';
 /* letra clarinha dentro de cada bolinha (ajuda o aluno; clara o bastante para não atrapalhar a leitura) */
 const LETRA_BOLHA = { cor: "#C9C9C9", tam: 2.3 };
 function blockInner(g) {
-  const L = blockLayout(g.nQ, g.nAlt), uw = L.W - 2 * L.m;
+  const L = layoutDe(g), uw = L.W - 2 * L.m;
   let s = `<rect width="${L.W}" height="${L.H}" fill="#fff"/>`;
   for (const [x, y] of L.mk) s += finderSVG(x, y);
   s += `<rect x="${L.W / 2 - 10}" y="${L.m - 2}" width="20" height="4" fill="#000"/>`;
-  for (const hx of L.heads) for (let a = 0; a < g.nAlt; a++) s += `<text x="${(hx + a * BLK.dx).toFixed(2)}" y="${L.headY + 1.1}" ${SVGF} font-size="3" font-weight="700" text-anchor="middle">${LET[a]}</text>`;
+  for (const [x, y, w, h] of L.frames) s += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="1.5" fill="none" stroke="#C8C8C8" stroke-width="0.25"/>`;
+  for (const h of L.heads) s += `<text x="${h.x.toFixed(2)}" y="${(h.y + 1.1).toFixed(2)}" ${SVGF} font-size="3" font-weight="700" text-anchor="middle">${h.t}</text>`;
   for (const q of L.q) {
-    s += `<text x="${q.nx.toFixed(2)}" y="${(q.y + 1.1).toFixed(2)}" ${SVGF} font-size="3" font-weight="700" text-anchor="end">${String(q.n).padStart(2, "0")}</text>`;
-    q.b.forEach((bx, a) => {
-      s += `<text x="${bx.toFixed(2)}" y="${(q.y + LETRA_BOLHA.tam * 0.36).toFixed(2)}" ${SVGF} font-size="${LETRA_BOLHA.tam}" fill="${LETRA_BOLHA.cor}" text-anchor="middle">${LET[a]}</text>`;
-      s += `<circle cx="${bx.toFixed(2)}" cy="${q.y.toFixed(2)}" r="${BLK.r}" fill="none" stroke="#000" stroke-width="0.28"/>`;
+    s += `<text x="${q.num.x.toFixed(2)}" y="${(q.num.y + 1.1).toFixed(2)}" ${SVGF} font-size="3" font-weight="700" text-anchor="${q.num.anchor}">${String(q.n).padStart(2, "0")}</text>`;
+    q.pts.forEach(([bx, by], a) => {
+      s += `<text x="${bx.toFixed(2)}" y="${(by + LETRA_BOLHA.tam * 0.36).toFixed(2)}" ${SVGF} font-size="${LETRA_BOLHA.tam}" fill="${LETRA_BOLHA.cor}" text-anchor="middle">${LET[a]}</text>`;
+      s += `<circle cx="${bx.toFixed(2)}" cy="${by.toFixed(2)}" r="${BLK.r}" fill="none" stroke="#000" stroke-width="0.28"/>`;
     });
   }
   codeBitsOf(g.code).forEach((b, i) => {
@@ -731,7 +773,7 @@ function blockSVG(g) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.W} ${L.H}" width="${L.W}mm" height="${L.H}mm">${s}</svg>`;
 }
 function pageSVG(g) {
-  const { s, L } = blockInner(g), bx = (210 - L.W) / 2, by = 72;
+  const { s, L } = blockInner(g), sc = Math.min(1, 212 / L.H, 190 / L.W), bx = (210 - L.W * sc) / 2, by = 72;
   let p = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" width="210mm" height="297mm"><rect width="210" height="297" fill="#fff"/>`;
   p += `<text x="20" y="25" ${SVGF} font-size="6" font-weight="700">${esc(g.name)}</text>`;
   p += `<text x="20" y="32" ${SVGF} font-size="3.6" fill="#333">${esc(g.subject || "")}</text>`;
@@ -739,7 +781,7 @@ function pageSVG(g) {
   p += `<text x="20" y="53" ${SVGF} font-size="3.6">Turma:</text><line x1="34" y1="53.5" x2="90" y2="53.5" stroke="#000" stroke-width="0.25"/>`;
   p += `<text x="98" y="53" ${SVGF} font-size="3.6">Data:</text><line x1="110" y1="53.5" x2="150" y2="53.5" stroke="#000" stroke-width="0.25"/>`;
   p += `<text x="105" y="64" ${SVGF} font-size="2.8" fill="#333" text-anchor="middle">Pinte todo o círculo com caneta azul ou preta. Não rasure e não escreva perto dos quadrados pretos.</text>`;
-  p += `<g transform="translate(${bx.toFixed(2)} ${by})">${s}</g>`;
+  p += `<g transform="translate(${bx.toFixed(2)} ${by}) scale(${sc.toFixed(4)})">${s}</g>`;
   p += `<text x="105" y="290" ${SVGF} font-size="2.6" fill="#555" text-anchor="middle">Corretor de Provas · código ${g.code} · ${g.nQ} questões</text>`;
   return p + `</svg>`;
 }
@@ -978,8 +1020,8 @@ function readCode(G, dst) {
   return chk === bits.slice(0, 9).reduce((a, b) => a + b, 0) % 8 && code > 0 ? code : null;
 }
 function readBubbles(at, g) {
-  const L = blockLayout(g.nQ, g.nAlt);
-  const means = L.q.map((q) => q.b.map((bx) => meanDisk(at, bx, q.y)));
+  const L = layoutDe(g);
+  const means = L.q.map((q) => q.pts.map(([bx, by]) => meanDisk(at, bx, by)));
   const p75 = pct(means.flat(), 0.75);
   const answers = [], doubt = [];
   for (const m of means) {
@@ -1037,7 +1079,7 @@ function finishScan(G, dst, code, preferId) {
   if (code && !gab) return { ok: false, reason: "unknown", code };
   if (!gab) gab = preferId && preferId !== "auto" ? gabById(preferId) : null;
   if (!gab) return { ok: false, reason: "nocode" };
-  const L = blockLayout(gab.nQ, gab.nAlt), H = homography(L.mk, loc.dst);
+  const L = layoutDe(gab), H = homography(L.mk, loc.dst);
   const r = readBubbles(sampler(loc.G, H), gab);
   return { ok: true, gab, code, ...r, rect: rectify(loc.G, H, L.W, L.H) };
 }
@@ -1045,7 +1087,7 @@ function finishScan(G, dst, code, preferId) {
 /* Foto de demonstração: uma prova "do Word" com o cartão colado embaixo, fotografada sobre a mesa */
 async function samplePhoto(g, seed = 7, blockScale = 0.8) {
   let s = seed; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const k = 5, L = blockLayout(g.nQ, g.nAlt);
+  const k = 5, L = layoutDe(g);
   const blk = await svgToCanvas(blockSVG(g), L.W, L.H, k), bctx = blk.getContext("2d");
   const truth = [];
   L.q.forEach((q, i) => {
@@ -1056,7 +1098,7 @@ async function samplePhoto(g, seed = 7, blockScale = 0.8) {
     truth.push(marks.length > 1 ? -1 : a);
     for (const mk of marks) {
       bctx.fillStyle = "rgba(25,35,120,0.9)"; bctx.beginPath();
-      bctx.ellipse((q.b[mk] + (rnd() - 0.5) * 0.4) * k, (q.y + (rnd() - 0.5) * 0.4) * k, 2.05 * k, 1.9 * k, rnd(), 0, Math.PI * 2); bctx.fill();
+      bctx.ellipse((q.pts[mk][0] + (rnd() - 0.5) * 0.4) * k, (q.pts[mk][1] + (rnd() - 0.5) * 0.4) * k, 2.05 * k, 1.9 * k, rnd(), 0, Math.PI * 2); bctx.fill();
     }
   });
   const page = document.createElement("canvas"); page.width = 210 * k; page.height = 297 * k;
@@ -1067,12 +1109,14 @@ async function samplePhoto(g, seed = 7, blockScale = 0.8) {
   p.fillText("Nome: ", 18 * k, 38 * k);
   p.fillStyle = "#1f2e86"; p.font = `italic ${5 * k}px 'Comic Sans MS', cursive`; p.fillText("Marina Alves Pereira", 32 * k, 38 * k);
   p.fillStyle = "#111";
-  const qs = ["Qual é a principal função das raízes de uma planta?", "O que acontece com a água durante a evaporação?", "Qual destes animais é um mamífero?", "A fotossíntese acontece principalmente nas…"];
+  const alto = L.H * blockScale > 110; // cartão alto (ex.: uma coluna): ocupa a página toda, como numa prova real
+  const qs = alto ? [] : ["Qual é a principal função das raízes de uma planta?", "O que acontece com a água durante a evaporação?", "Qual destes animais é um mamífero?", "A fotossíntese acontece principalmente nas…"];
   let y = 50;
   qs.forEach((t, i) => { p.font = `bold ${3.6 * k}px Arial`; p.fillText(`${i + 1}. ${t}`, 18 * k, y * k); p.font = `${3.4 * k}px Arial`; ["a) folhas", "b) raízes", "c) flores", "d) sementes"].forEach((o, j) => { p.fillText("● " + o, 24 * k, (y + 6 + j * 5) * k); }); y += 30; });
-  p.fillStyle = "#3b6e3b"; p.fillRect(140 * k, 48 * k, 50 * k, 34 * k); p.fillStyle = "#e8d44d"; p.beginPath(); p.arc(178 * k, 58 * k, 5 * k, 0, 7); p.fill();
-  const sb = Math.min(blockScale, 105 / L.H, 180 / L.W);
-  p.drawImage(blk, ((210 - L.W * sb) / 2) * k, (178 + (110 - L.H * sb) / 2) * k, L.W * sb * k, L.H * sb * k);
+  if (!alto) { p.fillStyle = "#3b6e3b"; p.fillRect(140 * k, 48 * k, 50 * k, 34 * k); p.fillStyle = "#e8d44d"; p.beginPath(); p.arc(178 * k, 58 * k, 5 * k, 0, 7); p.fill(); }
+  const [area0, areaH] = alto ? [44, 245] : [178, 110];
+  const sb = Math.min(blockScale, (areaH - 5) / L.H, 180 / L.W);
+  p.drawImage(blk, ((210 - L.W * sb) / 2) * k, (area0 + (areaH - L.H * sb) / 2) * k, L.W * sb * k, L.H * sb * k);
   const W = 1500, H = 2000, ph = document.createElement("canvas"); ph.width = W; ph.height = H;
   const c = ph.getContext("2d");
   const bg = c.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#7a6550"); bg.addColorStop(1, "#5c4a3a");
@@ -1134,7 +1178,7 @@ async function pngWithDpi(blob, dpi = 300) {
   return new Blob([buf.subarray(0, 33), ch, buf.subarray(33)], { type: "image/png" });
 }
 async function blockPNG(g) {
-  const L = blockLayout(g.nQ, g.nAlt), cv = await svgToCanvas(blockSVG(g), L.W, L.H, 300 / 25.4);
+  const L = layoutDe(g), cv = await svgToCanvas(blockSVG(g), L.W, L.H, 300 / 25.4);
   return pngWithDpi(await new Promise((r) => cv.toBlob(r, "image/png")));
 }
 async function pagePDF(g) {
@@ -1357,7 +1401,7 @@ function renderGabaritos(v) {
     <button class="btn primary" type="button" id="new-gab">${ICON.plus}Novo gabarito</button></div>
     ${hasEx ? `<div class="note spread"><span>Os itens marcados como <b>exemplo</b> servem para você conhecer o app.</span><button class="btn sm" type="button" id="del-ex">Apagar exemplos</button></div>` : ""}
     <div class="list">${gs.length ? gs.map(gabCard).join("") : `<div class="empty">Nenhum gabarito ainda. Toque em <b>Novo gabarito</b> para cadastrar as respostas certas da sua prova.</div>`}</div>`;
-  $("#new-gab").onclick = () => { S.edit = { id: null, name: "", subject: "", nQ: 20, nAlt: 5, points: 10, key: Array(20).fill(null) }; render(); };
+  $("#new-gab").onclick = () => { S.edit = { id: null, name: "", subject: "", nQ: 20, nAlt: 5, points: 10, layout: "colunas", key: Array(20).fill(null) }; render(); };
   const dx = $("#del-ex");
   if (dx) dx.onclick = async () => {
     if (!(await confirmBox("Apagar exemplos?", "Os gabaritos e resultados de exemplo serão removidos. Seus dados não são afetados.", "Apagar exemplos"))) return;
@@ -1378,7 +1422,7 @@ function gabCard(g) {
   return `<article class="panel">
     <div class="spread"><div class="stack tight"><h2>${esc(g.name)}</h2><p class="muted small">${esc(g.subject || "Sem descrição")}</p></div>
     <div class="row">${g.example ? `<span class="chip accent">exemplo</span>` : ""}<span class="chip mono">cód. ${g.code}</span></div></div>
-    <div class="row small"><span class="chip">${g.nQ} questões</span><span class="chip">${LET[0]}–${LET[g.nAlt - 1]}</span><span class="chip">vale ${fmtNum(g.points)}</span><span class="chip">${rs.length} corrigida${rs.length === 1 ? "" : "s"}${avg !== null ? ` · média ${fmtNum(avg)}` : ""}</span></div>
+    <div class="row small"><span class="chip">${g.nQ} questões</span><span class="chip">${LET[0]}–${LET[g.nAlt - 1]}</span><span class="chip">vale ${fmtNum(g.points)}</span><span class="chip">cartão: ${FORMATOS[formatoDe(g)].nome.toLowerCase()}</span><span class="chip">${rs.length} corrigida${rs.length === 1 ? "" : "s"}${avg !== null ? ` · média ${fmtNum(avg)}` : ""}</span></div>
     <div class="keystrip" aria-live="polite">${shown ? esc(keyStr) : "Respostas ocultas · " + "•".repeat(Math.min(g.nQ, 24))}</div>
     <div class="row">
       <button class="btn primary" type="button" data-act="scan" data-id="${g.id}">${ICON.cam}Corrigir</button>
@@ -1405,7 +1449,7 @@ async function gabAction(act, id) {
   }
 }
 function sheetModal(g) {
-  const L = blockLayout(g.nQ, g.nAlt);
+  const L = layoutDe(g);
   openModal(`<h2>Cartão-resposta</h2>
     <img class="sheet-preview" alt="Cartão-resposta de ${esc(g.name)}" style="width:${Math.min(100, L.W * 1.6)}%" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(blockSVG(g))}">
     <div class="stack tight small">
@@ -1437,7 +1481,16 @@ function renderEditor(v) {
         <label class="field">Alternativas<select id="ed-na" ${locked ? "disabled" : ""}><option value="4" ${e.nAlt === 4 ? "selected" : ""}>A–D</option><option value="5" ${e.nAlt === 5 ? "selected" : ""}>A–E</option></select></label>
         <label class="field">Valor da prova<input type="number" id="ed-pts" min="0.5" max="1000" step="0.5" value="${e.points}"></label>
       </div>
-      ${locked ? `<p class="small muted">Este gabarito já tem provas corrigidas, então o número de questões não pode mudar. Se você alterar respostas, as notas já salvas são recalculadas.</p>` : ""}
+      ${locked ? `<p class="small muted">Este gabarito já tem provas corrigidas, então o número de questões e o formato do cartão não podem mudar. Se você alterar respostas, as notas já salvas são recalculadas.</p>` : ""}
+    </div>
+    <div class="panel">
+      <div class="stack tight"><h2>Formato do cartão-resposta</h2><p class="small muted">Como as bolinhas ficam arrumadas no cartão que vai na prova.</p></div>
+      <div class="formatos" role="radiogroup" aria-label="Formato do cartão">${Object.entries(FORMATOS).map(([id, f]) => {
+        const off = locked || (f.max && e.nQ > f.max);
+        return `<button type="button" class="formato" role="radio" data-formato="${id}" aria-checked="${(e.layout || "colunas") === id}" ${off ? "disabled" : ""}><b>${f.nome}</b><span>${f.max && e.nQ > f.max ? `até ${f.max} questões` : f.desc}</span></button>`;
+      }).join("")}</div>
+      <img class="sheet-preview formato-previa" id="ed-previa" alt="Prévia do cartão-resposta no formato escolhido">
+      ${e.id && !locked ? `<p class="small muted">Se você já imprimiu cartões deste gabarito, ao trocar o formato imprima os cartões de novo.</p>` : ""}
     </div>
     <div class="panel">
       <div class="spread"><h2>Respostas certas</h2><span class="chip ${filled === e.nQ ? "ok" : "warn"}" id="ed-count">${filled} de ${e.nQ}</span></div>
@@ -1448,11 +1501,20 @@ function renderEditor(v) {
   </form>`;
   const sync = () => { e.name = $("#ed-name").value; e.subject = $("#ed-sub").value; e.points = parseFloat($("#ed-pts").value) || 10; };
   $("#ed-cancel").onclick = () => { S.edit = null; render(); };
+  const previa = () => { const g = { ...e, code: e.code || 1, layout: e.layout }; $("#ed-previa").src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(blockSVG(g)); };
+  previa();
+  v.querySelectorAll("[data-formato]").forEach((b) => (b.onclick = () => {
+    e.layout = b.dataset.formato;
+    v.querySelectorAll("[data-formato]").forEach((x) => x.setAttribute("aria-checked", x === b));
+    previa();
+  }));
   const resize = () => {
     sync();
     const nQ = Math.max(1, Math.min(100, parseInt($("#ed-nq").value) || 1)), nAlt = parseInt($("#ed-na").value);
     e.key = Array.from({ length: nQ }, (_, i) => (e.key[i] !== undefined && e.key[i] !== null && e.key[i] < nAlt ? e.key[i] : null));
-    e.nQ = nQ; e.nAlt = nAlt; render();
+    e.nQ = nQ; e.nAlt = nAlt;
+    if (FORMATOS[e.layout] && FORMATOS[e.layout].max < nQ) { e.layout = "colunas"; toast(`“Uma coluna” vale até ${FORMATOS.vertical.max} questões. Voltei para Colunas.`); }
+    render();
   };
   $("#ed-nq").onchange = resize; $("#ed-na").onchange = resize;
   $("#ed-fill").onclick = () => {
@@ -1476,11 +1538,11 @@ function renderEditor(v) {
     if (miss >= 0) return toast(`Falta a resposta da questão ${miss + 1}.`);
     if (e.id) {
       const i = S.data.gabaritos.findIndex((x) => x.id === e.id);
-      S.data.gabaritos[i] = stamp({ ...S.data.gabaritos[i], name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice() });
+      S.data.gabaritos[i] = stamp({ ...S.data.gabaritos[i], name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), layout: e.layout || "colunas" });
       const g = S.data.gabaritos[i];
       for (const r of resultsOf(g.id)) stamp(Object.assign(r, grade(g, r.answers)));
     } else {
-      S.data.gabaritos.unshift(stamp({ id: uid(), code: newCode(), name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), created: Date.now() }));
+      S.data.gabaritos.unshift(stamp({ id: uid(), code: newCode(), name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), layout: e.layout || "colunas", created: Date.now() }));
     }
     await persist(); S.edit = null; toast("Gabarito salvo"); render();
   };
@@ -1695,19 +1757,19 @@ function reviewRow(g, R, i) {
 }
 function drawOverlay() {
   const R = S.review, cv = $("#rv-canvas"); if (!cv || !R.rect) return;
-  const g = gabById(R.gabId), L = blockLayout(g.nQ, g.nAlt), k = R.rect.width / L.W;
+  const g = gabById(R.gabId), L = layoutDe(g), k = R.rect.width / L.W;
   cv.width = R.rect.width; cv.height = R.rect.height;
   const ctx = cv.getContext("2d");
   ctx.drawImage(R.rect, 0, 0);
   ctx.lineWidth = Math.max(2, k * 0.55);
   L.q.forEach((q, i) => {
     const a = R.answers[i], key = g.key[i];
-    if (R.doubt[i]) { ctx.strokeStyle = "#E08A00"; ctx.setLineDash([]); ctx.strokeRect((q.b[0] - 3.6) * k, (q.y - 3.4) * k, (q.b[g.nAlt - 1] - q.b[0] + 7.2) * k, 6.8 * k); }
-    q.b.forEach((bx, j) => {
+    if (R.doubt[i]) { const [bx0, by0, bw, bh] = q.box; ctx.strokeStyle = "#E08A00"; ctx.setLineDash([]); ctx.strokeRect(bx0 * k, by0 * k, bw * k, bh * k); }
+    q.pts.forEach(([bx, by], j) => {
       if (a === j) { ctx.strokeStyle = j === key ? "#1E9E5A" : "#D7263D"; ctx.setLineDash([]); }
       else if (j === key) { ctx.strokeStyle = "#1E9E5A"; ctx.setLineDash([k * 1.1, k * 0.8]); }
       else return;
-      ctx.beginPath(); ctx.arc(bx * k, q.y * k, 3 * k, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(bx * k, by * k, 3 * k, 0, 7); ctx.stroke();
     });
   });
   ctx.setLineDash([]);

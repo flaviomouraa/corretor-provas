@@ -45,7 +45,8 @@ Antes de entregar, olhe a tela: tire um screenshot com Playwright (largura 400px
 Estas regras existem porque cartões já impressos e dados já salvos dependem delas.
 
 - **Geometria do cartão** (`BLK`, `blockLayout`, `unitBitX`, `codeBitsOf`, `finderSVG`): mudar qualquer número invalida os cartões que os professores já imprimiram ou colaram nas provas. Se precisar mudar, crie um formato novo e mantenha a leitura do antigo, ou avise claramente o usuário que é preciso reimprimir. Detalhes em `references/leitura-optica.md`.
-- **Nada de borda/moldura ligando os marcadores**: os 4 marcadores precisam ser manchas separadas para serem encontrados.
+- **Nada de borda/moldura ligando os marcadores**: os 4 marcadores precisam ser manchas separadas para serem encontrados. As molduras do formato "Blocos de 5" ficam a ≥ 2,5 mm deles.
+- **Formato "colunas" é o original e não pode mudar**; formatos novos entram como outro valor de `layout`. Depois de mexer em `blockLayout`, compare a geometria de `colunas` com a versão anterior (todas as combinações de questões e alternativas).
 - **Formato do cofre** (`sealVault`/`openVault`, `PREFIX`, `acctId`, nomes `conta-<id>` e `img-<conta>-<resultado>` no db): mudar sem migração faz o professor perder o acesso. Leia ambos os formatos e grave o novo.
 - **Toda alteração de dados passa por `stamp(item)` e toda exclusão por `tomb(id)`**, seguidas de `persist()`. Sem isso a sincronização não sabe qual versão é a mais nova e itens apagados "ressuscitam" vindos do outro aparelho.
 - **O servidor só recebe dado cifrado.** A senha do Supabase é `authSecret(usuário, senha)` (PBKDF2 com outro sal), nunca a senha real nem a chave do cofre.
