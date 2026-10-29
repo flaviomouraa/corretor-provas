@@ -191,6 +191,15 @@ tr.click:hover td { background: var(--sunk); }
 .formato[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .formato[disabled] { opacity: .5; cursor: not-allowed; }
 .formato-previa { max-height: 340px; width: auto; }
+.aceite { display: flex; gap: 10px; align-items: flex-start; font-size: 0.9rem; cursor: pointer; }
+.aceite input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.aceite a, .rodape a, .link { color: var(--accent); font-weight: 700; }
+.rodape { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; }
+.link { background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
+.chave { font-size: clamp(0.95rem, 4.6vw, 1.25rem); letter-spacing: 0.04em; white-space: nowrap; text-align: center; padding: 14px; border-radius: 10px; background: var(--sunk); border: 1.5px dashed var(--accent); user-select: all; overflow-wrap: anywhere; }
+.passos { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 8px; }
+textarea { font: inherit; color: inherit; width: 100%; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--line-strong); background: var(--surface); resize: vertical; }
+textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .seg.tres { grid-template-columns: repeat(3, 1fr); max-width: 420px; }
 .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .cor { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; cursor: pointer; }
@@ -340,20 +349,79 @@ async function gz(bytes, compress) {
   const st = new Blob([bytes]).stream().pipeThrough(compress ? new CompressionStream("gzip") : new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(st).arrayBuffer());
 }
-async function sealVault(key, salt, data) {
+/* Cofre v3 ("envelope"): os dados são cifrados com uma chave aleatória própria (DK).
+   A DK fica guardada embrulhada pela senha (wp) e, se o professor criou, pela chave de
+   recuperação (wr). Trocar a senha só reembrulha a DK. Cofres v2 (chave = senha) ainda
+   abrem e são convertidos no login (migrarCofre). */
+async function importDK(raw) { return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]); }
+async function embrulhar(key, raw) { const { iv, ct } = await encBytes(key, raw); return { iv: b64(iv), ct: b64(ct) }; }
+async function desembrulhar(key, w) { return new Uint8Array(await decBytes(key, { iv: unb64(w.iv), ct: unb64(w.ct) })); }
+async function decifrarDados(o, key) {
+  let pt = new Uint8Array(await decBytes(key, { iv: unb64(o.iv), ct: unb64(o.ct) }));
+  if (o.z) pt = await gz(pt, false);
+  return JSON.parse(td.decode(pt));
+}
+async function sealVault(data = S.data) {
   let pt = te.encode(JSON.stringify(data));
   if (HAS_GZ) pt = await gz(pt, true);
-  const { iv, ct } = await encBytes(key, pt);
-  return JSON.stringify({ app: "corretor-provas", v: 2, kdf: "PBKDF2-SHA256", iter: ITER, z: HAS_GZ ? 1 : 0, t: Date.now(), salt: b64(salt), iv: b64(iv), ct: b64(ct) });
+  const { iv, ct } = await encBytes(S.key, pt);
+  const o = { app: "corretor-provas", v: S.dk ? 3 : 2, kdf: "PBKDF2-SHA256", iter: ITER, z: HAS_GZ ? 1 : 0, t: Date.now(), salt: b64(S.salt), iv: b64(iv), ct: b64(ct) };
+  if (S.dk) Object.assign(o, { kid: S.kid, wp: S.wrap.wp, wpT: S.wrap.wpT || 0, wr: S.wrap.wr || null, wrT: S.wrap.wrT || 0 });
+  return JSON.stringify(o);
 }
+const embrulhosDe = (o) => (o.v >= 3 ? { wp: o.wp, wpT: o.wpT || 0, wr: o.wr || null, wrT: o.wrT || 0 } : null);
 async function openVault(blob, pw) {
   const o = JSON.parse(blob);
   if (o.app !== "corretor-provas") throw new Error("formato");
-  const salt = unb64(o.salt);
-  const key = await deriveKey(pw, salt, o.iter || ITER);
-  let pt = new Uint8Array(await decBytes(key, { iv: unb64(o.iv), ct: unb64(o.ct) })); // falha se a senha estiver errada
-  if (o.z) pt = await gz(pt, false);
-  return { key, salt, data: JSON.parse(td.decode(pt)) };
+  const salt = unb64(o.salt), pwKey = await deriveKey(pw, salt, o.iter || ITER);
+  let key = pwKey, dk = null;
+  if (o.v >= 3) { dk = await desembrulhar(pwKey, o.wp); key = await importDK(dk); } // falha se a senha estiver errada
+  return { key, salt, dk, wrap: embrulhosDe(o), kid: o.kid || null, data: await decifrarDados(o, key) };
+}
+/* Chave de recuperação: 20 caracteres (100 bits). Nunca sai do aparelho; o servidor só guarda um resumo dela. */
+const REC_ALFA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function novoCodigo() { const r = crypto.getRandomValues(new Uint8Array(20)); return Array.from(r, (b, i) => REC_ALFA[b % 32] + (i % 4 === 3 && i < 19 ? "-" : "")).join(""); }
+const normCodigo = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function pbkdf(secret, sal, iter = 200000) { return crypto.subtle.importKey("raw", te.encode(secret), "PBKDF2", false, ["deriveBits", "deriveKey"]).then((base) => ({ base, sal: te.encode(sal), iter })); }
+async function chaveRecuperacao(user, code) {
+  const { base, sal, iter } = await pbkdf(normCodigo(code), "corretor-provas/rec/" + normUser(user));
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: sal, iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function verificadorRec(user, code) { // o que o aparelho envia para provar que tem a chave
+  const { base, sal, iter } = await pbkdf(normCodigo(code), "corretor-provas/verif/" + normUser(user));
+  return Array.from(new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt: sal, iterations: iter, hash: "SHA-256" }, base, 256)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function sha256hex(txt) { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(txt))), (b) => b.toString(16).padStart(2, "0")).join(""); }
+async function openWithRecovery(blob, user, code) {
+  const o = JSON.parse(blob);
+  if (!o.wr) throw new Error("sem chave");
+  const dk = await desembrulhar(await chaveRecuperacao(user, code), o.wr), key = await importDK(dk);
+  return { key, salt: unb64(o.salt), dk, wrap: embrulhosDe(o), kid: o.kid, data: await decifrarDados(o, key) };
+}
+function adotar(v, data = v.data) { Object.assign(S, { key: v.key, salt: v.salt, dk: v.dk || null, wrap: v.wrap || null, kid: v.kid || null, data }); }
+async function novoCofre(pw) { // chave própria nova + embrulho pela senha
+  S.salt = crypto.getRandomValues(new Uint8Array(16));
+  S.dk = crypto.getRandomValues(new Uint8Array(32)); S.key = await importDK(S.dk); S.kid = uid();
+  S.wrap = { wp: await embrulhar(await deriveKey(pw, S.salt), S.dk), wpT: Date.now(), wr: null, wrT: 0 };
+}
+async function trocarEmbrulhoSenha(pw) { // nova senha: só reembrulha a chave própria
+  S.salt = crypto.getRandomValues(new Uint8Array(16));
+  S.wrap = { ...S.wrap, wp: await embrulhar(await deriveKey(pw, S.salt), S.dk), wpT: Date.now() };
+}
+async function migrarCofre(pw) { // cofre antigo (chave = senha) → chave própria; imagens recifradas
+  const antiga = S.key, rec = S.wrap;
+  await novoCofre(pw);
+  if (rec && rec.wr) Object.assign(S.wrap, { wr: rec.wr, wrT: rec.wrT });
+  for (const r of S.data.results) { try { const bytes = await imageBytes(r.id, antiga); if (bytes) await putImageEnc(r.id, await encBytes(S.key, bytes)); } catch {} }
+  await persist();
+}
+/* o cofre remoto usa a mesma chave própria que este aparelho? */
+function mesmaChave(blob) { const o = JSON.parse(blob); return o.v >= 3 ? o.kid === S.kid : !S.dk && o.salt === b64(S.salt); }
+function adotarEmbrulhos(blob) { // senha trocada ou chave de recuperação criada em outro aparelho
+  const o = JSON.parse(blob);
+  if (o.v < 3 || !S.wrap || o.kid !== S.kid) return;
+  if ((o.wpT || 0) > (S.wrap.wpT || 0)) { S.wrap.wp = o.wp; S.wrap.wpT = o.wpT; S.salt = unb64(o.salt); }
+  if ((o.wrT || 0) > (S.wrap.wrT || 0)) { S.wrap.wr = o.wr; S.wrap.wrT = o.wrT; }
 }
 const blobTime = (b) => { try { return JSON.parse(b).t || 0; } catch { return -1; } };
 
@@ -398,6 +466,8 @@ async function vaultBlob(id) { // a versão mais recente entre nuvem e aparelho
    professor: o servidor nunca vê a senha real nem a chave do cofre.
    ============================================================ */
 const SUPA = { url: "https://imkikvxszvxucdowyvyl.supabase.co", key: "sb_publishable_QvhyTYiDhp2ZuEsQ8n2ECg_SOnV1c_E" }; // projeto Supabase do professor (chave pública: a proteção vem das regras por linha)
+const APP_VERSAO = "1.5";
+const TERMOS_VERSAO = "2026-10-29";
 const sync = { on: false, token: null, exp: 0, uid: null, email: null, authPw: null, remoteT: 0, dirty: false, last: 0, err: "", pendingImgs: new Set() };
 const syncEnabled = () => !IN_CLAUDE && !!SUPA.url && !!SUPA.key;
 async function authSecret(user, pw) {
@@ -422,7 +492,10 @@ async function supa(path, { method = "GET", body, auth = true, prefer } = {}) {
   return data;
 }
 function setSession(d) { sync.token = d.access_token; sync.uid = d.user.id; sync.exp = Date.now() + ((d.expires_in || 3600) - 60) * 1000; }
-async function syncSignIn() { setSession(await supa("/auth/v1/token?grant_type=password", { method: "POST", auth: false, body: { email: sync.email, password: sync.authPw } })); }
+async function syncSignIn() {
+  try { setSession(await supa("/auth/v1/token?grant_type=password", { method: "POST", auth: false, body: { email: sync.email, password: sync.authPw } })); }
+  catch (e) { if (e.status === 400 && /invalid|credentials/i.test(e.message + " " + e.code)) e.authFail = true; throw e; }
+}
 async function syncSignUp() {
   try {
     const d = await supa("/auth/v1/signup", { method: "POST", auth: false, body: { email: sync.email, password: sync.authPw } });
@@ -441,17 +514,12 @@ async function api(path, opts) {
 }
 async function remoteVault() { const rows = await api(`/rest/v1/cofres?select=blob,t&user_id=eq.${sync.uid}`); return rows && rows[0] ? rows[0] : null; }
 async function pushVault() {
-  const t = Date.now(), blob = await sealVault(S.key, S.salt, S.data);
+  const t = Date.now(), blob = await sealVault();
   await api("/rest/v1/cofres", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, blob, t } });
   ls.set(PREFIX + S.acct, blob);
   sync.remoteT = t; sync.dirty = false; sync.last = Date.now(); sync.err = "";
 }
-async function openWithKey(blob, key) {
-  const o = JSON.parse(blob);
-  let pt = new Uint8Array(await decBytes(key, { iv: unb64(o.iv), ct: unb64(o.ct) }));
-  if (o.z) pt = await gz(pt, false);
-  return JSON.parse(td.decode(pt));
-}
+async function openWithKey(blob, key) { return decifrarDados(JSON.parse(blob), key); }
 /* junta as alterações de dois aparelhos: fica a versão mais nova de cada item; exclusões valem */
 const itemT = (x) => x.upd || x.edited || x.created || 0;
 function mergeData(a, b) {
@@ -514,11 +582,11 @@ async function syncConnect(pw, { create = false } = {}) {
   if (remote) {
     let v;
     if (pw) v = await openVault(remote.blob, pw);
-    else if (JSON.parse(remote.blob).salt === b64(S.salt)) v = { key: S.key, salt: S.salt, data: await openWithKey(remote.blob, S.key) };
+    else if (mesmaChave(remote.blob)) { adotarEmbrulhos(remote.blob); v = { key: S.key, salt: S.salt, dk: S.dk, wrap: S.wrap, kid: S.kid, data: await openWithKey(remote.blob, S.key) }; }
     else throw syncErr("Para juntar os dados deste aparelho com os da nuvem, toque em Sair e entre de novo com seu usuário e senha.", "relogin");
     const merged = S.data ? mergeData(S.data, v.data) : v.data;
     push = canon(merged) !== canon(v.data);
-    Object.assign(S, { key: v.key, salt: v.salt, data: merged });
+    adotar(v, merged);
     sync.remoteT = remote.t;
   } else if (!S.data) throw syncErr("Usuário ou senha incorretos.", "wrongpw");
   sync.on = true; sync.err = "";
@@ -528,7 +596,9 @@ async function syncConnect(pw, { create = false } = {}) {
 let syncChain = Promise.resolve();
 function syncNow() {
   if (!S.key || (!sync.on && !sync.authPw)) return syncChain;
-  syncChain = syncChain.then(doSync).catch((e) => { console.warn(e); sync.err = e.code === "offline" ? "Sem internet agora. Sincronizo quando a conexão voltar." : explain(e); updateSyncNote(); });
+  syncChain = syncChain.then(doSync).catch((e) => {
+    console.warn(e);
+    if (e.authFail && sync.on) { logout("A senha desta conta foi trocada em outro aparelho. Entre com a senha nova."); return; } sync.err = e.code === "offline" ? "Sem internet agora. Sincronizo quando a conexão voltar." : explain(e); updateSyncNote(); });
   return syncChain;
 }
 async function doSync() {
@@ -540,7 +610,8 @@ async function doSync() {
   const remote = await remoteVault();
   let changed = false;
   if (remote && remote.t > sync.remoteT) {
-    if (JSON.parse(remote.blob).salt !== b64(S.salt)) { sync.on = false; logout("A senha desta conta foi trocada em outro aparelho. Entre com a senha nova."); return; }
+    if (!mesmaChave(remote.blob)) { sync.on = false; logout("Os dados desta conta foram protegidos de novo em outro aparelho. Entre de novo com seu usuário e senha."); return; }
+    adotarEmbrulhos(remote.blob);
     const rdata = await openWithKey(remote.blob, S.key), before = canon(S.data);
     S.data = mergeData(S.data, rdata);
     changed = canon(S.data) !== before;
@@ -549,6 +620,7 @@ async function doSync() {
     else ls.set(PREFIX + S.acct, remote.blob);
   }
   if (sync.dirty || !remote) await pushVault();
+  await enviarVerificador();
   for (const rid of [...sync.pendingImgs]) {
     const o = await idb.get(imgKey(rid)).catch(() => null);
     if (o) await api("/rest/v1/imagens", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, id: rid, iv: b64(o.iv), ct: b64(o.ct) } });
@@ -656,7 +728,7 @@ const S = { acct: null, key: null, salt: null, data: null, tab: "gabaritos", rev
 const AUTOLOCK_MIN = 10;
 
 async function persist() {
-  const blob = await sealVault(S.key, S.salt, S.data);
+  const blob = await sealVault();
   const local = ls.set(PREFIX + S.acct, blob);
   const remote = await cloudWrite("conta-" + S.acct, { blob, t: Date.now() });
   if (!local && !remote && !sync.on) toast("Não consegui salvar. Faça um backup na aba Conta.");
@@ -1276,14 +1348,17 @@ function renderLock(msg = "", keep = {}) {
         <label class="field">Usuário <span class="hint">letras, números, ponto ou traço</span><input type="text" id="nw-user" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="30" value="${esc(keep.user || "")}" placeholder="Ex.: carla.mendes"></label>
         <label class="field">Senha <span class="hint">mínimo de 8 caracteres</span><input type="password" id="nw-pw" autocomplete="new-password" minlength="8" required></label>
         <label class="field">Repita a senha<input type="password" id="nw-pw2" autocomplete="new-password" minlength="8" required></label>
+        <label class="aceite"><input type="checkbox" id="nw-aceite" ${keep.aceite ? "checked" : ""}> <span>Li e aceito os ${IN_CLAUDE ? "Termos de Uso e a Política de Privacidade" : `<a href="termos/index.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="privacidade/index.html" target="_blank" rel="noopener">Política de Privacidade</a>`}.</span></label>
         ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ""}
         <button class="btn primary big" type="submit">Criar conta</button>
         <button class="btn quiet" type="button" id="restore">Restaurar um backup</button>
       </form>`}
     <p class="small muted" id="store-note">Verificando onde suas contas ficam guardadas…</p>
+    ${IN_CLAUDE ? "" : `<nav class="rodape small"><a href="apresentacao/index.html">Conheça o app</a><a href="privacidade/index.html">Privacidade</a><a href="termos/index.html">Termos</a>${podeSugerir() ? `<button type="button" class="link" id="lk-msg">Fale conosco</button>` : ""}</nav>`}
   </div>`;
   cloudReady().then((ok) => { const n = $("#store-note"); if (n) n.textContent = ok ? "Suas contas ficam guardadas com segurança na sua conta Claude: continuam funcionando depois de fechar o app e em outros aparelhos." : IN_CLAUDE ? "Neste acesso, as contas ficam guardadas só neste navegador. Para não perder nada, abra o app logado na sua conta Claude e faça backups." : syncEnabled() ? "Entre com o mesmo usuário e senha no celular, no computador ou no iPhone: seus gabaritos e notas aparecem em todos, sempre criptografados." : "Suas contas ficam guardadas neste celular, criptografadas. Faça backups de vez em quando na aba Conta."; });
   $("#m-login").onclick = () => { lockMode = "login"; renderLock(); };
+  const lk = $("#lk-msg"); if (lk) lk.onclick = sugestaoModal;
   $("#m-new").onclick = () => { lockMode = "new"; renderLock(); };
   if (isLogin) {
     $("#login-f").onsubmit = async (e) => {
@@ -1291,7 +1366,7 @@ function renderLock(msg = "", keep = {}) {
       const user = $("#lg-user").value, pw = $("#lg-pw").value;
       if (S.fails >= 3) { busy(true, "Muitas tentativas. Aguarde…"); await sleep(Math.min(30000, 1000 * 2 ** (S.fails - 2))); }
       busy(true, "Entrando…");
-      try { await login(user, pw); S.fails = 0; busy(false); enterApp(); }
+      try { await login(user, pw); S.fails = 0; busy(false); enterApp(); if (!S.data.rec && !S.lembrouRec) { S.lembrouRec = true; setTimeout(lembrarChave, 600); } }
       catch (err) { console.warn(err); if (!err || err.code !== "offline") S.fails++; busy(false); renderLock((err && err.userMsg) || (err && err.status && err.status !== 400 ? explain(err) : "Usuário ou senha incorretos."), { user }); }
     };
     $("#forgot").onclick = forgotModal;
@@ -1303,14 +1378,17 @@ function renderLock(msg = "", keep = {}) {
       if (!/^[a-zA-Z0-9._-]{3,30}$/.test(user)) return renderLock("O usuário deve ter de 3 a 30 letras, números, ponto ou traço, sem espaços.", keep);
       if (a.length < 8) return renderLock("A senha precisa ter pelo menos 8 caracteres.", keep);
       if (a !== b) return renderLock("As duas senhas não são iguais.", keep);
+      if (!$("#nw-aceite").checked) return renderLock("Para criar a conta, marque que você aceita os Termos de Uso e a Política de Privacidade.", keep);
+      keep.aceite = true;
       busy(true, "Verificando…");
       const id = await acctId(user);
       await cloudReady();
       if (await vaultBlob(id)) { busy(false); return renderLock("Este usuário já existe. Use a opção Entrar.", keep); }
       busy(true, "Criando conta…");
       ls.set(LAST_USER, user);
-      S.acct = id; S.salt = crypto.getRandomValues(new Uint8Array(16)); S.key = await deriveKey(a, S.salt);
+      S.acct = id; await novoCofre(a);
       S.data = exampleData({ name, username: user });
+      S.data.aceite = { versao: TERMOS_VERSAO, em: Date.now() };
       if (syncEnabled()) {
         busy(true, "Criando conta no servidor…");
         try { await syncStart(user, a, { create: true }); }
@@ -1322,18 +1400,23 @@ function renderLock(msg = "", keep = {}) {
       }
       await persist();
       busy(false); enterApp();
+      posCriacao();
     };
     $("#restore").onclick = () => { S.importMode = "replace"; $("#file-backup").click(); };
   }
   const f = [...L.querySelectorAll("form input")].find((i) => !i.value); f && f.focus();
 }
 async function login(user, pw) {
+  await entrar(user, pw);
+  if (!S.dk) { busy(true, "Atualizando a proteção dos seus dados…"); await migrarCofre(pw); } // cofre antigo → chave própria
+}
+async function entrar(user, pw) {
   await cloudReady();
   const id = await acctId(user), blob = await vaultBlob(id);
-  Object.assign(S, { acct: id, key: null, salt: null, data: null });
+  Object.assign(S, { acct: id, key: null, salt: null, dk: null, wrap: null, kid: null, data: null });
   let localOk = false;
   if (blob) {
-    try { const v = await openVault(blob, pw); Object.assign(S, { key: v.key, salt: v.salt, data: v.data }); localOk = true; }
+    try { adotar(await openVault(blob, pw)); localOk = true; }
     catch (e) { if (!syncEnabled()) throw e; } // a senha pode ter sido trocada em outro aparelho
   }
   if (syncEnabled()) {
@@ -1354,20 +1437,162 @@ async function login(user, pw) {
   if (!legacy) throw new Error("conta");
   const v = await openVault(legacy, pw), d = v.data;
   d.version = 2; d.user = { name: user, username: user }; d.prefs = d.prefs || { lastTurma: "" };
-  Object.assign(S, { acct: id, key: v.key, salt: v.salt, data: d });
+  S.acct = id; adotar(v, d);
   await persist(); ls.del(LEGACY_KEY);
 }
 function forgotModal() {
   openModal(`<h2>Esqueceu a senha?</h2>
-    <p>Por segurança, a senha não pode ser recuperada: sem ela ninguém consegue ler os gabaritos, nem você. Se tiver um backup, você pode criar a conta de novo e restaurá-lo.</p>
-    <p class="muted small">Para apagar a conta deste aparelho e começar de novo, digite o usuário abaixo.</p>
-    <label class="field">Usuário<input type="text" id="fg-user" autocapitalize="none" spellcheck="false"></label>
-    <div class="actions"><button class="btn" type="button" id="fg-no">Cancelar</button><button class="btn danger" type="button" id="fg-yes">Apagar esta conta</button></div>`, (el) => {
+    <p>Use a <b>chave de recuperação</b> que o app mostrou quando você criou a conta (ou que você criou em Conta). Com ela você define uma senha nova e não perde nada.</p>
+    <form class="stack" id="rec-f">
+      <label class="field">Usuário<input type="text" id="rc-user" autocapitalize="none" spellcheck="false" required value="${esc(ls.get(LAST_USER) || "")}"></label>
+      <label class="field">Chave de recuperação<input type="text" id="rc-code" autocapitalize="characters" spellcheck="false" autocomplete="off" required placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></label>
+      <div class="grid2"><label class="field">Nova senha<input type="password" id="rc-pw" autocomplete="new-password" minlength="8" required></label>
+      <label class="field">Repita a nova senha<input type="password" id="rc-pw2" autocomplete="new-password" minlength="8" required></label></div>
+      <p class="err" id="rc-err" role="alert" hidden></p>
+      <div class="actions"><button class="btn" type="button" id="fg-no">Cancelar</button><button class="btn primary" type="submit">Recuperar acesso</button></div>
+    </form>
+    <details class="small muted"><summary>Não tenho a chave de recuperação</summary>
+      <p style="margin-top:8px">Sem a senha e sem a chave, ninguém consegue abrir os dados, nem você nem o suporte: é isso que os protege. Se tiver um backup, crie uma conta nova e restaure-o. Para apagar a conta deste aparelho e começar de novo, digite o usuário acima e toque em <b>Apagar esta conta</b>.</p>
+      <p style="margin-top:8px"><button class="btn danger sm" type="button" id="fg-yes">Apagar esta conta</button></p>
+    </details>`, (el) => {
     el.querySelector("#fg-no").onclick = closeModal;
+    el.querySelector("#rec-f").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const user = el.querySelector("#rc-user").value.trim(), code = el.querySelector("#rc-code").value, a = el.querySelector("#rc-pw").value, b = el.querySelector("#rc-pw2").value, err = el.querySelector("#rc-err");
+      const falha = (m) => { err.textContent = m; err.hidden = false; };
+      if (normCodigo(code).length !== 20) return falha("A chave tem 20 letras e números, no formato XXXX-XXXX-XXXX-XXXX-XXXX.");
+      if (a.length < 8) return falha("A nova senha precisa ter pelo menos 8 caracteres.");
+      if (a !== b) return falha("As duas senhas não são iguais.");
+      busy(true, "Recuperando acesso…");
+      try { await recuperarConta(user, code, a); busy(false); closeModal(); ls.set(LAST_USER, user); enterApp(); toast("Pronto! Sua senha nova já vale."); }
+      catch (e) { console.warn(e); busy(false); falha(e.userMsg || "Não consegui recuperar a conta. Confira o usuário e a chave."); }
+    };
     el.querySelector("#fg-yes").onclick = async () => {
-      const id = await acctId(el.querySelector("#fg-user").value);
-      if (!(await vaultBlob(id))) return toast("Não há conta com esse usuário.");
+      const id = await acctId(el.querySelector("#rc-user").value);
+      if (!(await vaultBlob(id))) return toast("Não há conta com esse usuário neste aparelho.");
+      if (!(await confirmBox("Apagar esta conta?", "Os dados desta conta neste aparelho serão apagados. Não dá para desfazer.", "Apagar"))) return;
       await wipeAccount(id); closeModal(); toast("Conta apagada"); lockMode = "new"; renderLock();
+    };
+  });
+}
+async function recuperarConta(user, code, novaSenha) {
+  await cloudReady();
+  const id = await acctId(user);
+  Object.assign(S, { acct: id, key: null, salt: null, dk: null, wrap: null, kid: null, data: null });
+  let blob = null, servidor = false;
+  if (syncEnabled()) { // o servidor confere a chave (só um resumo dela) e troca a senha de acesso
+    sync.email = await syncEmail(user);
+    const novaAuth = await authSecret(user, novaSenha);
+    try {
+      const ok = await supa("/rest/v1/rpc/recuperar_conta", { method: "POST", auth: false, body: { p_email: sync.email, p_verificador: await verificadorRec(user, code), p_nova_senha: novaAuth } });
+      if (ok === true) { sync.authPw = novaAuth; await syncSignIn(); const r = await remoteVault(); if (r) { blob = r.blob; sync.remoteT = r.t; servidor = true; } }
+    } catch (e) { if (e.code !== "offline") console.warn(e); }
+  }
+  if (!blob) blob = ls.get(PREFIX + id);
+  if (!blob) throw syncErr("Não encontrei essa conta com essa chave. Confira o usuário e a chave de recuperação.", "rec");
+  let v;
+  try { v = await openWithRecovery(blob, user, code); } catch { throw syncErr("A chave de recuperação não confere com essa conta.", "rec"); }
+  adotar(v);
+  await trocarEmbrulhoSenha(novaSenha);
+  if (servidor) { sync.on = true; await pushVault(); }
+  else if (syncEnabled()) sync.err = "Acesso recuperado neste aparelho. A sincronização volta quando a chave estiver cadastrada no servidor (Conta → Chave de recuperação → Gerar nova chave).";
+  await persist();
+}
+/* criar (ou trocar) a chave de recuperação */
+async function criarChaveRec() {
+  const code = novoCodigo(), user = S.data.user.username;
+  if (!S.dk) return null;
+  S.wrap = { ...S.wrap, wr: await embrulhar(await chaveRecuperacao(user, code), S.dk), wrT: Date.now() };
+  S.data.rec = { criada: Date.now(), h: await sha256hex(await verificadorRec(user, code)) };
+  await persist();
+  enviarVerificador();
+  return code;
+}
+async function enviarVerificador() {
+  if (!sync.on || !S.data || !S.data.rec || sync.recOk === S.data.rec.h) return;
+  try { await api("/rest/v1/recuperacao", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, verificador: S.data.rec.h } }); sync.recOk = S.data.rec.h; }
+  catch (e) { console.warn(e); }
+}
+function mostrarChave(code, depois) {
+  openModal(`<h2>Sua chave de recuperação</h2>
+    <p>Se você esquecer a senha, é com esta chave que você volta a entrar. <b>Guarde num lugar seguro</b>: anote num caderno, salve o arquivo ou tire um print.</p>
+    <div class="chave mono" id="rc-show">${code}</div>
+    <div class="row"><button class="btn sm" type="button" id="rc-copy">Copiar</button><button class="btn sm" type="button" id="rc-save">Baixar arquivo</button></div>
+    <p class="small muted">Ela não aparece de novo. Se perder, gere outra em Conta → Chave de recuperação.</p>
+    <label class="aceite"><input type="checkbox" id="rc-ok"> <span>Guardei minha chave em lugar seguro.</span></label>
+    <div class="actions"><button class="btn primary" type="button" id="rc-done" disabled>Continuar</button></div>`, (el) => {
+    el.onclick = (e) => e.stopPropagation();
+    el.querySelector("#rc-copy").onclick = () => { navigator.clipboard.writeText(code).then(() => toast("Chave copiada"), () => { const r = document.createRange(); r.selectNodeContents(el.querySelector("#rc-show")); getSelection().removeAllRanges(); getSelection().addRange(r); toast("Selecionei a chave: copie com o menu do celular."); }); };
+    el.querySelector("#rc-save").onclick = () => saveFile(`chave-recuperacao-${slug(S.data.user.username)}.txt`, `Corretor de Provas\nUsuário: ${S.data.user.username}\nChave de recuperação: ${code}\n\nSe esquecer a senha: tela de entrada → Esqueci a senha → informe o usuário e esta chave.\nGuarde este arquivo em lugar seguro e não compartilhe.\n`);
+    const ok = el.querySelector("#rc-ok"), done = el.querySelector("#rc-done");
+    ok.onchange = () => (done.disabled = !ok.checked);
+    done.onclick = () => { closeModal(); depois && depois(); };
+  });
+  $("#modal").onclick = null; // só fecha pelo botão
+}
+async function posCriacao() {
+  const code = await criarChaveRec();
+  const seguir = () => boasVindas();
+  if (code) mostrarChave(code, seguir); else seguir();
+}
+function lembrarChave() {
+  if (!S.data || S.data.rec || !$("#modal").hidden) return;
+  openModal(`<h2>Crie sua chave de recuperação</h2><p>Com ela você recupera o acesso se esquecer a senha, sem perder gabaritos e notas. Leva 1 minuto.</p>
+    <div class="actions"><button class="btn" type="button" id="lc-no">Depois</button><button class="btn primary" type="button" id="lc-yes">Criar agora</button></div>`, (el) => {
+    el.querySelector("#lc-no").onclick = closeModal;
+    el.querySelector("#lc-yes").onclick = async () => { closeModal(); const code = await criarChaveRec(); if (code) mostrarChave(code, () => render()); };
+  });
+}
+function boasVindas() {
+  const nome = (S.data.user && S.data.user.name || "").split(" ")[0];
+  openModal(`<h2>Boas-vindas${nome ? ", " + esc(nome) : ""}!</h2>
+    <ol class="passos">
+      <li><b>Cadastre o gabarito</b> da sua prova em <i>Gabaritos → Novo gabarito</i> e escolha o formato do cartão.</li>
+      <li><b>Coloque o cartão-resposta na prova</b>: baixe a imagem para o Word ou a folha A4 pronta.</li>
+      <li><b>Fotografe as provas</b> em <i>Corrigir</i>. O app lê, dá a nota e guarda tudo para os gráficos da turma.</li>
+    </ol>
+    <p class="small muted">Deixamos duas provas de exemplo, com uma turma fictícia, para você explorar. Quer mantê-las?</p>
+    <div class="actions"><button class="btn" type="button" id="bv-zero">Começar do zero</button><button class="btn primary" type="button" id="bv-ex">Explorar com exemplos</button></div>`, (el) => {
+    el.querySelector("#bv-ex").onclick = () => { closeModal(); go("gabaritos"); };
+    el.querySelector("#bv-zero").onclick = async () => { closeModal(); await apagarExemplos(); go("gabaritos"); };
+  });
+}
+async function apagarExemplos() {
+  const exIds = new Set(S.data.gabaritos.filter((g) => g.example).map((g) => g.id));
+  for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) { deleteImage(r.id); tomb(r.id); }
+  for (const g of S.data.gabaritos) if (g.example) tomb(g.id);
+  S.data.gabaritos = S.data.gabaritos.filter((g) => !g.example);
+  S.data.results = S.data.results.filter((r) => !r.example && !exIds.has(r.gabId));
+  await persist();
+}
+/* ---------- sugestões e problemas (vão para a tabela "sugestoes" do Supabase) ---------- */
+const podeSugerir = () => !IN_CLAUDE && !!SUPA.url && !!SUPA.key;
+function ondeRoda() { return window.AndroidBridge ? "app Android" : matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "app instalado" : "navegador"; }
+function sugestaoModal() {
+  openModal(`<h2>Fale conosco</h2>
+    <p class="small muted">Conte o que achou, peça uma melhoria ou descreva um problema. A mensagem vai direto para quem desenvolve o app.</p>
+    <form class="stack" id="sg-f">
+      <div class="seg tres" role="group" aria-label="Tipo de mensagem">${[["sugestao", "Sugestão"], ["problema", "Problema"], ["elogio", "Elogio"]].map(([id, n], i) => `<button type="button" data-tipo="${id}" aria-pressed="${i === 0}">${n}</button>`).join("")}</div>
+      <label class="field">Mensagem<textarea id="sg-txt" rows="5" maxlength="4000" required placeholder="Escreva aqui…"></textarea></label>
+      <label class="field">Contato para resposta <span class="hint">opcional: e-mail ou WhatsApp</span><input type="text" id="sg-cont" maxlength="120" autocomplete="email"></label>
+      <label class="aceite"><input type="checkbox" id="sg-tec" checked> <span>Enviar a versão do app e o tipo de aparelho (ajuda a resolver problemas).</span></label>
+      <p class="small muted">Não escreva senhas, chaves de recuperação nem nomes de alunos.</p>
+      <div class="actions"><button class="btn" type="button" id="sg-no">Cancelar</button><button class="btn primary" type="submit">Enviar</button></div>
+    </form>`, (el) => {
+    let tipo = "sugestao";
+    el.querySelectorAll("[data-tipo]").forEach((b) => (b.onclick = () => { tipo = b.dataset.tipo; el.querySelectorAll("[data-tipo]").forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    el.querySelector("#sg-no").onclick = closeModal;
+    el.querySelector("#sg-f").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const texto = el.querySelector("#sg-txt").value.trim(); if (!texto) return;
+      const tec = el.querySelector("#sg-tec").checked;
+      const body = { tipo, texto, contato: el.querySelector("#sg-cont").value.trim() || null, versao: tec ? `${APP_VERSAO} · ${ondeRoda()}` : null, aparelho: tec ? navigator.userAgent.slice(0, 250) : null };
+      busy(true, "Enviando…");
+      try {
+        if (sync.on && (!sync.token || Date.now() > sync.exp)) await syncSignIn().catch(() => {});
+        await supa("/rest/v1/sugestoes", { method: "POST", auth: !!sync.token, prefer: "return=minimal", body });
+        busy(false); closeModal(); toast("Mensagem enviada. Obrigado!");
+      } catch (e) { busy(false); console.warn(e); toast(e.code === "offline" ? "Sem internet agora. Tente de novo mais tarde." : "Não consegui enviar. Tente de novo mais tarde."); }
     };
   });
 }
@@ -1386,7 +1611,7 @@ async function wipeAccount(id) {
 function logout(reason, mode = "login") {
   Object.assign(sync, { on: false, token: null, uid: null, authPw: null, email: null, remoteT: 0, dirty: false, err: "" });
   sync.pendingImgs.clear();
-  Object.assign(S, { acct: null, key: null, data: null, review: null, edit: null, manual: null, lastPhoto: null, reveal: {} });
+  Object.assign(S, { acct: null, key: null, salt: null, dk: null, wrap: null, kid: null, data: null, review: null, edit: null, manual: null, lastPhoto: null, reveal: {} });
   lockMode = mode; closeModal(); renderLock(reason || "");
 }
 function enterApp() {
@@ -1422,13 +1647,7 @@ function renderGabaritos(v) {
   const dx = $("#del-ex");
   if (dx) dx.onclick = async () => {
     if (!(await confirmBox("Apagar exemplos?", "Os gabaritos e resultados de exemplo serão removidos. Seus dados não são afetados.", "Apagar exemplos"))) return;
-    const exIds = new Set(S.data.gabaritos.filter((g) => g.example).map((g) => g.id));
-    for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) deleteImage(r.id);
-    for (const g of S.data.gabaritos) if (g.example) tomb(g.id);
-    for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) tomb(r.id);
-    S.data.gabaritos = S.data.gabaritos.filter((g) => !g.example);
-    S.data.results = S.data.results.filter((r) => !r.example && !exIds.has(r.gabId));
-    await persist(); toast("Exemplos apagados"); render();
+    await apagarExemplos(); toast("Exemplos apagados"); render();
   };
   v.querySelectorAll("[data-act]").forEach((b) => (b.onclick = () => gabAction(b.dataset.act, b.dataset.id)));
 }
@@ -2005,6 +2224,13 @@ function renderAccount(v) {
       <p class="small muted">Use o mesmo usuário e senha no celular, no computador ou no iPhone: gabaritos, notas e imagens dos cartões aparecem em todos. Tudo é enviado já criptografado com a sua senha; nem o servidor consegue ler.</p>
       <p class="small" id="sync-note">${esc(syncText())}</p>
       <div><button class="btn" type="button" id="sx-sync" ${sync.on || sync.authPw ? "" : "disabled"}>${sync.on ? "Sincronizar agora" : "Tentar de novo"}</button></div></div>` : ""}
+    <div class="panel"><div class="spread"><h3>Chave de recuperação</h3><span class="chip ${S.data.rec ? "ok" : "warn"}">${S.data.rec ? "criada" : "não criada"}</span></div>
+      <p class="small muted">${S.data.rec ? `Criada em ${fmtDate(S.data.rec.criada)}. Se você esquecer a senha, use-a em <i>Esqueci a senha</i> na tela de entrada.` : "Sem ela, quem esquece a senha perde os dados. Crie agora e guarde num lugar seguro."}</p>
+      <div><button class="btn ${S.data.rec ? "" : "primary"}" type="button" id="sx-rec">${S.data.rec ? "Gerar nova chave" : "Criar chave de recuperação"}</button></div>
+    </div>
+    ${podeSugerir() ? `<div class="panel"><h3>Ajuda e sugestões</h3><p class="small muted">Encontrou um problema ou tem uma ideia? Mande uma mensagem.</p>
+      <div class="row"><button class="btn" type="button" id="sx-msg">Fale conosco</button><a class="btn quiet" href="apresentacao/index.html" target="_blank" rel="noopener">Sobre o app</a><a class="btn quiet" href="privacidade/index.html" target="_blank" rel="noopener">Privacidade</a><a class="btn quiet" href="termos/index.html" target="_blank" rel="noopener">Termos</a></div>
+      <p class="small muted">Versão ${APP_VERSAO}</p></div>` : ""}
     <div class="panel"><h3>Aparência</h3>
       <p class="small muted">Escolha a cor do app neste aparelho.</p>
       <div class="cores" role="radiogroup" aria-label="Cor do app">${Object.entries(CORES).map(([id, c]) => `<button type="button" class="cor" role="radio" data-cor-id="${id}" aria-checked="${lerAparencia().cor === id}" aria-label="${c.nome}"><span class="amostra" style="--a:${c.l};--b:${c.d}"></span>${c.nome}</button>`).join("")}</div>
@@ -2027,7 +2253,7 @@ function renderAccount(v) {
     busy(true, "Preparando backup…");
     const images = {};
     for (const r of S.data.results) { try { const bytes = await imageBytes(r.id); if (bytes) images[r.id] = b64(bytes); } catch {} }
-    const blob = await sealVault(S.key, S.salt, { ...S.data, images });
+    const blob = await sealVault({ ...S.data, images });
     busy(false);
     if (await saveFile(`backup-corretor-${slug((S.data.user && S.data.user.username) || "conta")}-${new Date().toISOString().slice(0, 10)}.json`, blob)) toast("Backup pronto");
   };
@@ -2035,6 +2261,12 @@ function renderAccount(v) {
   const salvarAparencia = (mud) => { const a = { ...lerAparencia(), ...mud }; ls.set(APAR_KEY, JSON.stringify(a)); aplicarAparencia(a); const y = window.scrollY; render(); window.scrollTo(0, y); };
   v.querySelectorAll("[data-cor-id]").forEach((b) => (b.onclick = () => salvarAparencia({ cor: b.dataset.corId })));
   v.querySelectorAll("[data-modo]").forEach((b) => (b.onclick = () => salvarAparencia({ modo: b.dataset.modo })));
+  $("#sx-rec").onclick = async () => {
+    if (S.data.rec && !(await confirmBox("Gerar nova chave?", "A chave antiga deixa de funcionar. Guarde a nova em lugar seguro.", "Gerar nova chave", false))) return;
+    busy(true, "Gerando chave…"); const code = await criarChaveRec(); busy(false);
+    if (code) mostrarChave(code, () => render());
+  };
+  const sm = $("#sx-msg"); if (sm) sm.onclick = sugestaoModal;
   const sb = $("#sx-sync");
   if (sb) sb.onclick = async () => { sb.disabled = true; $("#sync-note").textContent = "Sincronizando…"; sync.dirty = true; await syncNow(); if (!sync.err && sync.on) toast("Tudo sincronizado"); render(); };
   $("#sx-pw").onsubmit = async (e) => {
@@ -2048,9 +2280,8 @@ function renderAccount(v) {
       try { const np = await authSecret(S.data.user.username, n); await api("/auth/v1/user", { method: "PUT", body: { password: np } }); sync.authPw = np; }
       catch (e) { busy(false); return toast(e.code === "offline" ? "Para trocar a senha é preciso estar com internet." : "Não consegui trocar a senha no servidor. Tente de novo."); }
     }
-    const oldKey = S.key, salt = crypto.getRandomValues(new Uint8Array(16)), key = await deriveKey(n, salt);
-    for (const r of S.data.results) { try { const bytes = await imageBytes(r.id, oldKey); if (bytes) await putImageEnc(r.id, await encBytes(key, bytes)); } catch {} }
-    S.salt = salt; S.key = key;
+    if (!S.dk) await migrarCofre(o);
+    await trocarEmbrulhoSenha(n);
     if (sync.on) { await syncChain; await pushVault(); }
     await persist();
     busy(false); toast("Senha trocada. Backups antigos continuam com a senha antiga."); render();
@@ -2072,12 +2303,13 @@ async function onBackupFile(file) {
   if (S.importMode === "replace" || !S.data) {
     const user = data.user && data.user.username;
     if (!user) { busy(false); return toast("Este backup é de uma versão antiga. Crie uma conta e use Restaurar backup na aba Conta."); }
-    Object.assign(S, { acct: await acctId(user), key: v.key, salt: v.salt, data: { ...data, version: 2 } });
+    S.acct = await acctId(user); adotar(v, { ...data, version: 2 });
     if (syncEnabled()) {
       try { await syncStart(user, pw); }
       catch (e) { busy(false); Object.assign(S, { acct: null, key: null, data: null }); return toast(e.userMsg || "Não consegui ligar a sincronização. Tente de novo."); }
     }
     for (const [rid, b] of Object.entries(images)) await putImageEnc(rid, await encBytes(S.key, unb64(b))).catch(() => {});
+    if (!S.dk) await migrarCofre(pw);
     await persist(); busy(false); toast(`Backup restaurado. Seu usuário é @${user}.`); return enterApp();
   }
   let ng = 0, nr = 0;

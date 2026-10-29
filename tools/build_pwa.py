@@ -74,4 +74,13 @@ version = hashlib.sha256(html.encode()).hexdigest()[:10]
 sw = (ROOT / "tools" / "sw.template.js").read_text(encoding="utf-8")
 sw = sw.replace("__VERSION__", version).replace("__SHELL__", json.dumps(shell))
 (OUT / "sw.js").write_text(sw, encoding="utf-8")
+# páginas públicas: apresentação, privacidade e termos
+PAG = ROOT / "tools" / "paginas"
+(OUT / "paginas" / "img").mkdir(parents=True, exist_ok=True)
+shutil.copy(PAG / "estilo.css", OUT / "paginas" / "estilo.css")
+for img in (PAG / "img").glob("*.png"):
+    shutil.copy(img, OUT / "paginas" / "img" / img.name)
+for nome in ("apresentacao", "privacidade", "termos"):
+    (OUT / nome).mkdir(exist_ok=True)
+    shutil.copy(PAG / f"{nome}.html", OUT / nome / "index.html")
 print(f"docs/ gerado (versão {version})")

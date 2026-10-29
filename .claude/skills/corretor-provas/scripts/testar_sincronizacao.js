@@ -20,9 +20,9 @@ const ROOT = path.resolve(process.argv[2] || path.join(__dirname, "../../../..")
 const DOCS = path.join(ROOT, "docs");
 
 /* ---------- servidor que imita o Supabase ---------- */
-const users = new Map(), tokens = new Map(), tables = { cofres: [], imagens: [] };
+const users = new Map(), tokens = new Map(), tables = { cofres: [], imagens: [], recuperacao: [], sugestoes: [] };
 let tablesReady = true; // false = o professor ainda não rodou o configurar.sql
-const keyOf = { cofres: (r) => r.user_id, imagens: (r) => r.user_id + "|" + r.id };
+const keyOf = { cofres: (r) => r.user_id, imagens: (r) => r.user_id + "|" + r.id, recuperacao: (r) => r.user_id, sugestoes: () => Math.random() };
 function supaMock(req, res) {
   const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,PATCH,OPTIONS" };
   const send = (code, body) => { res.writeHead(code, { ...cors, "content-type": "application/json" }); res.end(body === undefined ? "" : JSON.stringify(body)); };
@@ -46,7 +46,17 @@ function supaMock(req, res) {
       for (const x of users.values()) if (x.id === uid) x.password = body.password;
       return send(200, { id: uid });
     }
-    const m = u.pathname.match(/^\/rest\/v1\/(cofres|imagens)$/);
+    if (u.pathname === "/rest/v1/rpc/recuperar_conta") { // mesma lógica da função SQL
+      if (!tablesReady) return send(404, { code: "PGRST202", message: "Could not find the function" });
+      const x = users.get(String(body.p_email).toLowerCase()), h = crypto.createHash("sha256").update(body.p_verificador).digest("hex");
+      if (!x || String(body.p_nova_senha).length < 20 || !tables.recuperacao.some((r) => r.user_id === x.id && r.verificador === h)) return send(200, false);
+      x.password = body.p_nova_senha; return send(200, true);
+    }
+    const m = u.pathname.match(/^\/rest\/v1\/(cofres|imagens|recuperacao|sugestoes)$/);
+    if (m && m[1] === "sugestoes" && req.method === "POST") { // qualquer um pode enviar, ninguém lê pela API
+      if (!tablesReady) return send(404, { code: "PGRST205", message: "Could not find the table 'public.sugestoes' in the schema cache" });
+      tables.sugestoes.push({ ...body, user_id: uid || null }); return send(201);
+    }
     if (!m) return send(404, { message: "not found" });
     if (!uid) return send(401, { message: "JWT required" });
     if (!tablesReady) return send(404, { code: "PGRST205", message: `Could not find the table 'public.${m[1]}' in the schema cache` });
@@ -72,6 +82,17 @@ function staticServer(dir) {
   });
 }
 const listen = (srv) => new Promise((r) => srv.listen(0, "127.0.0.1", () => r(srv.address().port)));
+
+/* criar conta: aceita os termos, passa pela chave de recuperação e pelas boas-vindas; devolve a chave */
+async function criarConta(p) {
+  await p.check("#nw-aceite"); await p.click("#new-f button[type=submit]");
+  await p.waitForSelector("#rc-ok", { timeout: 30000 });
+  const code = (await p.textContent("#rc-show")).trim();
+  await p.check("#rc-ok"); await p.click("#rc-done");
+  await p.waitForSelector("#bv-ex"); await p.click("#bv-ex");
+  await p.waitForSelector("#view h1");
+  return code;
+}
 
 const failures = [];
 const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); if (!ok) failures.push(msg); };
@@ -101,7 +122,7 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   const A = await device("celular");
   await A.p.click("#m-new");
   await A.p.fill("#nw-name", "Prof.ª Ana"); await A.p.fill("#nw-user", "ana.prof"); await A.p.fill("#nw-pw", "senha1234"); await A.p.fill("#nw-pw2", "senha1234");
-  await A.p.click("#new-f button[type=submit]"); await A.p.waitForSelector("#view h1", { timeout: 30000 });
+  const chaveAna = await criarConta(A.p);
   check((await state(A.p)).on && tables.cofres.length === 1, "conta criada já sincronizando (cofre no servidor)");
 
   // 2. celular corrige uma prova
@@ -147,8 +168,10 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   await A.p.click("#sx-pw button[type=submit]");
   await A.p.waitForFunction(() => document.querySelector("#toast").textContent.includes("Senha trocada"), null, { timeout: 60000 });
   await syncNowP(B.p);
+  check(await B.p.evaluate(() => !!S.key && sync.on && !sync.err), "logo depois da troca de senha, o computador continua funcionando (a chave dos dados não muda)");
+  await B.p.evaluate(() => { sync.exp = 0; }); await syncNowP(B.p); // sessão do servidor venceu
   const bLocked = await B.p.evaluate(() => !S.key && document.querySelector("#lock").innerText.includes("trocada em outro aparelho"));
-  check(bLocked, "computador sai sozinho e avisa quando a senha é trocada no celular");
+  check(bLocked, "quando a sessão vence, o computador pede a senha nova");
   await login(B.p, "ana.prof", "senha1234");
   check(await B.p.isVisible(".err"), "senha antiga não entra mais");
   await login(B.p, "ana.prof", "novasenha99"); await B.p.waitForSelector("#view h1");
@@ -164,7 +187,7 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   // 9. conta antiga, criada sem sincronização, sobe para o servidor ao entrar
   await C.p.evaluate(async () => { SUPA.url = ""; });
   await C.p.click("#m-new"); await C.p.fill("#nw-name", "Velha"); await C.p.fill("#nw-user", "conta.velha"); await C.p.fill("#nw-pw", "senha5678"); await C.p.fill("#nw-pw2", "senha5678");
-  await C.p.click("#new-f button[type=submit]"); await C.p.waitForSelector("#view h1");
+  await criarConta(C.p);
   await C.p.click("#btn-lock");
   await C.p.evaluate((u) => { SUPA.url = u; }, api);
   const before = tables.cofres.length;
@@ -175,13 +198,13 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   tablesReady = false;
   const D = await device("pc-do-flavio");
   await D.p.click("#m-new"); await D.p.fill("#nw-name", "Flávio"); await D.p.fill("#nw-user", "flavio.moura"); await D.p.fill("#nw-pw", "senha9876"); await D.p.fill("#nw-pw2", "senha9876");
-  await D.p.click("#new-f button[type=submit]"); await D.p.waitForSelector("#view h1", { timeout: 30000 });
+  await criarConta(D.p);
   await D.p.click(".tab[data-tab=conta]");
   check((await D.p.innerText("#sync-note")).includes("configurar.sql"), "sem as tabelas: entra no app e a aba Conta explica que falta rodar o configurar.sql");
   // segunda tentativa de criar a mesma conta (já existe pela metade no servidor) também não trava
   const E = await device("celular-do-flavio");
   await E.p.click("#m-new"); await E.p.fill("#nw-name", "Flávio"); await E.p.fill("#nw-user", "flavio.moura"); await E.p.fill("#nw-pw", "senha9876"); await E.p.fill("#nw-pw2", "senha9876");
-  await E.p.click("#new-f button[type=submit]"); await E.p.waitForSelector("#view h1", { timeout: 30000 });
+  await criarConta(E.p);
   check(true, "criar de novo a conta que ficou pela metade não dá erro");
   tablesReady = true;
   const before10 = tables.cofres.length;
@@ -193,6 +216,38 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   await E.p.click("#btn-lock"); await login(E.p, "flavio.moura", "senha9876"); await E.p.waitForSelector("#view h1");
   await syncNowP(D.p);
   check((await E.p.evaluate(() => sync.on)) && (await D.p.evaluate(() => S.data.results.length)) === (await E.p.evaluate(() => S.data.results.length)), "ao entrar de novo, os dados dos dois aparelhos se juntam");
+
+  // 11. fale conosco
+  await A.p.click(".tab[data-tab=conta]"); await A.p.click("#sx-msg");
+  await A.p.click('[data-tipo="problema"]'); await A.p.fill("#sg-txt", "A câmera demorou para abrir no meu celular."); await A.p.fill("#sg-cont", "ana@escola.exemplo");
+  await A.p.click("#sg-f button[type=submit]");
+  await A.p.waitForFunction(() => document.querySelector("#toast").textContent.includes("Mensagem enviada"), null, { timeout: 20000 });
+  const sg = tables.sugestoes[0] || {};
+  check(sg.tipo === "problema" && sg.texto.includes("câmera") && sg.contato === "ana@escola.exemplo" && !!sg.user_id && /1\.5/.test(sg.versao || ""), "“Fale conosco” grava a mensagem no servidor, com versão do app");
+  const C2 = await device("visitante");
+  await C2.p.click("#lk-msg"); await C2.p.fill("#sg-txt", "Gostei muito!"); await C2.p.click("#sg-f button[type=submit]");
+  await C2.p.waitForFunction(() => document.querySelector("#toast").textContent.includes("Mensagem enviada"), null, { timeout: 20000 });
+  check(tables.sugestoes.length === 2 && tables.sugestoes[1].user_id === null, "dá para mandar mensagem da tela de entrada, sem estar logado");
+
+  // 12. esqueci a senha → chave de recuperação, em outro aparelho
+  const F = await device("celular-novo");
+  const recuperar = async (user, code, pw) => {
+    await F.p.click("#m-login"); await F.p.click("#forgot");
+    await F.p.fill("#rc-user", user); await F.p.fill("#rc-code", code); await F.p.fill("#rc-pw", pw); await F.p.fill("#rc-pw2", pw);
+    await F.p.click("#rec-f button[type=submit]");
+    await F.p.waitForFunction(() => document.querySelector("#busy").hidden && (!document.querySelector("#rc-err") || !document.querySelector("#rc-err").hidden || document.querySelector("#modal").hidden), null, { timeout: 60000 });
+  };
+  await recuperar("ana.prof", "AAAA-BBBB-CCCC-DDDD-EEEE", "qualquer-coisa1");
+  check(await F.p.evaluate(() => !S.key && !document.querySelector("#rc-err").hidden), "chave de recuperação errada não entra");
+  await F.p.click("#fg-no");
+  await recuperar("ana.prof", chaveAna.toLowerCase().replace(/-/g, " "), "recuperada123");
+  await F.p.waitForSelector("#view h1", { timeout: 30000 });
+  check((await state(F.p)).r === (await state(A.p)).r, "com a chave de recuperação, outro aparelho entra com senha nova e tudo aparece");
+  check((await F.p.evaluate(async () => { const r = S.data.results.find((x) => x.student === "Marina Alves Pereira"); return !!(r && (await loadImage(r.id))); })), "imagens abrem depois da recuperação");
+  await F.p.click("#btn-lock"); await login(F.p, "ana.prof", "novasenha99");
+  check(await F.p.isVisible(".err"), "depois da recuperação, a senha anterior não entra mais");
+  await login(F.p, "ana.prof", "recuperada123"); await F.p.waitForSelector("#view h1");
+  check(await F.p.evaluate(() => sync.on), "a senha nova definida pela recuperação entra normalmente");
 
   check(errs.length === 0, `sem erros de JavaScript${errs.length ? ": " + errs.slice(0, 3).join(" | ") : ""}`);
   await browser.close();

@@ -30,6 +30,9 @@ Como o app se comporta no iPhone:
 - Dados ficam no aparelho. Para levar do Android para o iPhone: Conta → Baixar backup no Android, mandar o arquivo para o iPhone, salvar em Arquivos, e no iPhone **Criar conta → Restaurar um backup**.
 - App Store exige conta de desenvolvedor Apple (US$ 99/ano) e revisão; só sugira se o professor quiser distribuir para outros.
 
+### Páginas públicas
+`tools/paginas/` (apresentacao.html, privacidade.html, termos.html, estilo.css, img/) viram `docs/apresentacao/`, `docs/privacidade/`, `docs/termos/` e `docs/paginas/` no build. Links sempre com `…/index.html` (no APK uma pasta sem o arquivo não abre). As imagens da apresentação vêm do app real: `node tools/capturas.js && python3 tools/build_pwa.py`. Textos legais: versão de testes, sem identificação formal do responsável (o professor deve completar com nome/CNPJ/e-mail e revisar com um advogado antes de lançar).
+
 ## 3. APK Android
 
 O APK é só para Android. No iPhone use a PWA (App Store exige conta Apple de US$ 99/ano).

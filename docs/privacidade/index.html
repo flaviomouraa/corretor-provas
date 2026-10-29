@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Política de Privacidade · Corretor de Provas</title>
+<meta name="description" content="Como o Corretor de Provas protege os dados de professores e alunos (LGPD).">
+<meta name="theme-color" content="#2340C4">
+<link rel="icon" href="../icons/icon-192.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<link rel="stylesheet" href="../paginas/estilo.css">
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="marca" href="../apresentacao/index.html"><svg viewBox="0 0 28 28" aria-hidden="true"><g fill="currentColor"><path d="M0 0h8v8H0zM2 2v4h4V2z" fill-rule="evenodd"/><path d="M20 0h8v8h-8zM22 2v4h4V2z" fill-rule="evenodd"/><path d="M0 20h8v8H0zM2 22v4h4v-4z" fill-rule="evenodd"/><path d="M20 20h8v8h-8zM22 22v4h4v-4z" fill-rule="evenodd"/><circle cx="11" cy="12" r="2.2"/><circle cx="17" cy="16" r="2.2"/></g><g fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="17" cy="12" r="2.2"/><circle cx="11" cy="16" r="2.2"/></g></svg>Corretor de Provas</a><a class="btn primary" href="../index.html">Abrir o app</a></div></header>
+<main>
+<div class="wrap doc">
+<h1>Política de Privacidade</h1>
+<p class="data">Versão de 29 de outubro de 2026 · Corretor de Provas (versão de testes)</p>
+
+<p>Esta política explica quais dados o aplicativo Corretor de Provas (“app”) trata, como eles são protegidos e quais são os seus direitos, de acordo com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018, “LGPD”). Ao criar uma conta, você declara ter lido e concordado com ela.</p>
+
+<h2>1. Quem é responsável</h2>
+<p>O app é mantido pelo responsável pelo Corretor de Provas (“nós”). Para falar conosco sobre privacidade, use o botão <b>Fale conosco</b> no app (tela de entrada ou aba Conta).</p>
+
+<h2>2. Princípio central: criptografia no seu aparelho</h2>
+<p>Os dados que você cadastra no app (gabaritos, nomes de alunos e turmas, respostas, notas e imagens dos cartões corrigidos) são <b>criptografados no seu próprio aparelho</b> (AES-256) com uma chave que só a sua senha ou a sua chave de recuperação conseguem abrir. Somente depois disso eles são guardados no aparelho e enviados ao servidor de sincronização. <b>Nós não temos acesso a esse conteúdo</b> e não conseguimos lê-lo, nem recuperá-lo se você perder a senha e a chave de recuperação.</p>
+
+<h2>3. Quais dados tratamos</h2>
+<ul>
+  <li><b>Dados da conta:</b> nome de usuário escolhido por você. O servidor recebe apenas um identificador derivado do usuário e uma senha de acesso derivada da sua senha; a sua senha real nunca é enviada.</li>
+  <li><b>Conteúdo criptografado:</b> o cofre com gabaritos, alunos, notas e configurações, e as imagens dos cartões corrigidos, sempre cifrados como descrito acima. O seu nome de exibição fica dentro do cofre.</li>
+  <li><b>Chave de recuperação:</b> o servidor guarda apenas um resumo (hash) que permite conferir a chave, nunca a chave em si.</li>
+  <li><b>Fotos das provas:</b> são lidas no próprio aparelho. A foto original não é guardada; fica apenas o recorte do cartão-resposta, criptografado.</li>
+  <li><b>Mensagens do “Fale conosco”:</b> o texto, o tipo de mensagem, o contato (se você informar) e, se você permitir, a versão do app e o tipo de aparelho. Essas mensagens <b>não</b> são criptografadas, por isso pedimos que não incluam nomes de alunos, senhas ou chaves.</li>
+</ul>
+<p>Não usamos cookies de rastreamento, ferramentas de propaganda nem análise de comportamento. A página pode carregar fontes do Google Fonts, que recebe o endereço IP do visitante para entregar as fontes.</p>
+
+<h2>4. Dados de alunos (crianças e adolescentes)</h2>
+<p>O professor ou a escola que cadastra alunos no app é quem decide sobre esses dados e deve tratá-los com base legal adequada, no melhor interesse dos estudantes (art. 14 da LGPD), normalmente no contexto das atividades de avaliação escolar. Recomendamos cadastrar apenas o necessário (por exemplo, nome e turma). Como os dados são criptografados no aparelho do professor, nós não temos acesso a eles.</p>
+
+<h2>5. Para que usamos os dados</h2>
+<ul>
+  <li>Permitir o login e manter seus dados disponíveis nos seus aparelhos (sincronização);</li>
+  <li>Permitir a recuperação de acesso com a chave de recuperação;</li>
+  <li>Responder mensagens e melhorar o app a partir das sugestões recebidas.</li>
+</ul>
+<p>As bases legais são a execução do serviço que você solicitou (art. 7º, V) e, para as mensagens, o nosso legítimo interesse em atender e melhorar o app (art. 7º, IX).</p>
+
+<h2>6. Onde os dados ficam e com quem são compartilhados</h2>
+<p>Os dados criptografados ficam no seu aparelho e no serviço de banco de dados <b>Supabase</b>, contratado para hospedar a sincronização. O site do app é hospedado no <b>GitHub Pages</b>. Esses fornecedores podem armazenar dados em servidores fora do Brasil, sempre recebendo somente o conteúdo já criptografado (exceto as mensagens do “Fale conosco” e os dados técnicos de acesso, como endereço IP). Não vendemos nem compartilhamos dados para publicidade.</p>
+
+<h2>7. Por quanto tempo guardamos</h2>
+<p>Enquanto a sua conta existir. Ao usar <b>Conta → Apagar minha conta</b>, o cofre e as imagens são apagados do aparelho e do servidor. As mensagens do “Fale conosco” podem ser guardadas pelo tempo necessário para atendê-las e melhorar o app.</p>
+
+<h2>8. Segurança</h2>
+<p>Usamos criptografia AES-256 no aparelho, chaves derivadas da senha com PBKDF2, conexão segura (HTTPS) e regras no servidor que impedem uma conta de acessar os dados de outra. Você também é responsável por manter sua senha e sua chave de recuperação em segredo. Sem elas, os dados não podem ser recuperados por ninguém.</p>
+
+<h2>9. Seus direitos</h2>
+<p>Você pode, a qualquer momento: acessar e exportar seus dados (Conta → Baixar backup ou Exportar planilha); corrigi-los no próprio app; apagá-los (Conta → Apagar minha conta); e pedir informações sobre o tratamento pelo <b>Fale conosco</b>. Também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).</p>
+
+<h2>10. Mudanças nesta política</h2>
+<p>Se esta política mudar, avisaremos no app. A data no topo indica a versão em vigor.</p>
+</div>
+
+</main>
+<footer class="rodape"><div class="wrap"><span>Corretor de Provas · versão de testes</span><nav><a href="../apresentacao/index.html">Apresentação</a><a href="../privacidade/index.html">Privacidade</a><a href="../termos/index.html">Termos de Uso</a><a href="../index.html">Abrir o app</a></nav></div></footer>
+</body>
+</html>

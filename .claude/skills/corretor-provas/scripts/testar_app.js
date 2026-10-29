@@ -37,6 +37,17 @@ function serve(dir, extra) {
   });
 }
 
+/* criar conta: aceita os termos, passa pela chave de recuperação e pelas boas-vindas; devolve a chave */
+async function criarConta(p) {
+  await p.check("#nw-aceite"); await p.click("#new-f button[type=submit]");
+  await p.waitForSelector("#rc-ok", { timeout: 30000 });
+  const code = (await p.textContent("#rc-show")).trim();
+  await p.check("#rc-ok"); await p.click("#rc-done");
+  await p.waitForSelector("#bv-ex"); await p.click("#bv-ex");
+  await p.waitForSelector("#view h1");
+  return code;
+}
+
 const failures = [];
 const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); if (!ok) failures.push(msg); };
 
@@ -67,7 +78,7 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   await p.goto(base + "/__teste.html");
   await p.click("#m-new");
   await p.fill("#nw-name", "Prof. Teste"); await p.fill("#nw-user", "teste"); await p.fill("#nw-pw", "senha1234"); await p.fill("#nw-pw2", "senha1234");
-  await p.click("#new-f button[type=submit]"); await p.waitForSelector("#view h1");
+  await criarConta(p);
 
   // ---- 1 e 2: leitura óptica ----
   const omr = await p.evaluate(async () => {
@@ -156,9 +167,26 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   await p2.click("tr.click >> nth=0").catch(() => {});
   await p2.click("#btn-lock").catch(() => {});
   await p2.click("#m-new"); await p2.fill("#nw-name", "Outro"); await p2.fill("#nw-user", "outro"); await p2.fill("#nw-pw", "outrasenha"); await p2.fill("#nw-pw2", "outrasenha");
-  await p2.click("#new-f button[type=submit]"); await p2.waitForSelector("#view h1");
+  await criarConta(p2);
   check((await p2.evaluate(() => S.data.results.length)) === nRes - 1, "contas separadas (a nova só tem os exemplos)");
   await p2.close();
+
+  // ---- 4b: cofre antigo (chave = senha) é convertido no login, com as imagens ----
+  const p3 = await ctx.newPage(); watch(p3);
+  await p3.goto(base + "/__teste.html");
+  await p3.click("#m-new"); await p3.fill("#nw-name", "Antiga"); await p3.fill("#nw-user", "conta.antiga"); await p3.fill("#nw-pw", "senha2468"); await p3.fill("#nw-pw2", "senha2468");
+  await criarConta(p3);
+  const antes = await p3.evaluate(async () => { // transforma num cofre do formato anterior, com uma imagem salva
+    S.dk = null; S.wrap = null; S.kid = null; S.key = await deriveKey("senha2468", S.salt);
+    const c = document.createElement("canvas"); c.width = 40; c.height = 40; c.getContext("2d").fillRect(5, 5, 20, 20);
+    S.data.results[0].id = "img-antiga"; await saveImage("img-antiga", c); await persist();
+    return { v: JSON.parse(localStorage.getItem(PREFIX + S.acct)).v, n: S.data.results.length };
+  });
+  await p3.click("#btn-lock"); await p3.fill("#lg-user", "conta.antiga"); await p3.fill("#lg-pw", "senha2468"); await p3.click("#login-f button[type=submit]");
+  await p3.waitForSelector("#view h1");
+  const depois = await p3.evaluate(async () => ({ v: JSON.parse(localStorage.getItem(PREFIX + S.acct)).v, n: S.data.results.length, img: !!(await loadImage("img-antiga")) }));
+  check(antes.v === 2 && depois.v === 3 && depois.n === antes.n && depois.img, "conta do formato antigo é convertida no login sem perder dados nem imagens");
+  await p3.close();
 
   // ---- 5: versão instalável ----
   if (fs.existsSync(path.join(ROOT, "docs", "index.html"))) {
@@ -171,7 +199,7 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
     await q.reload(); await q.waitForSelector("#m-new", { timeout: 10000 });
     check(await q.evaluate(() => !!window.jspdf), "app instalável abre sem internet (com gerador de PDF)");
     await q.click("#m-new"); await q.fill("#nw-name", "P"); await q.fill("#nw-user", "pwa"); await q.fill("#nw-pw", "senha1234"); await q.fill("#nw-pw2", "senha1234");
-    await q.click("#new-f button[type=submit]"); await q.waitForSelector("#view h1");
+    await criarConta(q);
     await q.click("[data-act=sheet]");
     const [dl] = await Promise.all([q.waitForEvent("download", { timeout: 20000 }), q.click("#sh-pdf")]);
     check(dl.suggestedFilename().endsWith(".pdf"), "PDF do cartão é gerado");

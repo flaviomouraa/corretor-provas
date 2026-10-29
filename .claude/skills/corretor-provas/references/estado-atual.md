@@ -6,12 +6,18 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 | Onde | Endereço | Versão |
 |---|---|---|
-| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.4 (versionCode 7), com sincronização, sem zoom, cores, letras nas bolinhas e 4 formatos de cartão |
+| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.5 (versionCode 8): + chave de recuperação, cofre v3, Fale conosco, boas-vindas, aceite dos termos, páginas públicas |
 | Site instalável / iPhone | https://flaviomouraa.github.io/corretor-provas/ | gerado de `docs/`; Pages **ativo** (confirmado em 29/10/2026) |
-| Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | versão 7 (mesmo código da 1.4), capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
+| Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | mesmo código da versão atual, capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
+| Apresentação / Privacidade / Termos | https://flaviomouraa.github.io/corretor-provas/apresentacao/index.html (e /privacidade/, /termos/) | 1.5 |
 | Código | https://github.com/flaviomouraa/corretor-provas (público, ramo `main`) | |
 
 ## Pendências
+
+- **Rodar de novo o `supabase/configurar.sql`** (1.5 acrescentou `recuperacao`, `recuperar_conta` e `sugestoes`). Sem isso: "Fale conosco" falha e a recuperação só funciona no próprio aparelho.
+- **Segredos do GitHub para a chave permanente** (`ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASS`): arquivo com os valores entregue ao professor em 29/10/2026. Depois que ele criar, o próximo APK sai assinado com a chave permanente (uma última desinstalação) e daí em diante instala por cima. Impressão digital SHA-256 da chave: 12:EA:E7:AC:…:E4:75.
+- **Textos legais**: completar identificação do responsável (nome/CNPJ/e-mail) e revisar com advogado antes do lançamento amplo.
+- **Plano comercial** (conversado em 29/10): etapa 1 feita na 1.5; próximas: teste com 10–30 professores, repositório privado + Cloudflare/Netlify, Play Store, plano Pro (Mercado Pago/Stripe), painel da coordenação.
 
 - **Sincronização entre aparelhos**: **funcionando com o servidor real** desde 29/10/2026 (conta `flavio.moura` criada no site pelo PC, aba Conta mostrou "ativa"). Foi preciso desligar "Confirm email" e apagar o usuário pendente no Supabase. Falta confirmar que o professor entrou no celular com a mesma conta (Entrar, não Criar conta) e, se havia dados antigos só no celular, trouxe pelo backup (Conta → Restaurar backup, que junta).
 - **Chave de assinatura permanente do APK**: ainda não configurada. Os segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` não existem; cada build sai com chave de depuração descartável. A chave gerada na sessão original (`android/keystore/`) estava fora do git e pode ter se perdido: se não existir, gere outra com `keytool` (alias `corretor`) e guie o professor a criar os dois segredos. Oferecido ao professor em 28/10/2026, sem resposta ainda.
@@ -32,10 +38,12 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 11. 1.3: o app "dava zoom" em alguns momentos no celular → zoom desligado; opção de **mudar a cor do app** (6 cores + automático/claro/escuro, na aba Conta).
 12. 1.3.1: **letras clarinhas dentro das bolinhas** do cartão-resposta, para facilitar a marcação dos alunos.
 13. 1.4: **formato do cartão à escolha** no cadastro do gabarito (Colunas, Uma coluna, Horizontal, Blocos de 5), com prévia.
+15. Quer tornar o app **comercial**: pediu a "etapa 1" (pronto para outros professores testarem) → 1.5.
 14. "Gostei bastante do resultado" (29/10/2026, sobre a 1.4): aprovou os 4 formatos, as cores e as letras nas bolinhas. Mantenha esse padrão de entrega (veja "Como entregar uma versão" no SKILL.md).
 
 ## Funcionalidades atuais (resumo)
 
+- Criar conta: aceite dos termos → chave de recuperação → boas-vindas (explorar com exemplos ou começar do zero). "Esqueci a senha" com a chave. "Fale conosco" na entrada e na aba Conta.
 - Contas locais com usuário e senha (PBKDF2 + AES-GCM); sai sozinho após 10 min sem uso; espera crescente após 3 senhas erradas.
 - Gabaritos (1–100 questões, A–D ou A–E, valor da prova), respostas ocultas até tocar em "Ver respostas", preenchimento rápido digitando "ABDCE…".
 - Cartão-resposta em 4 formatos (escolhido por gabarito): imagem PNG 300 dpi para o Word e folha A4 em PDF; código do gabarito impresso no cartão.

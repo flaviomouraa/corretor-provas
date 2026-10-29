@@ -14,6 +14,13 @@ Objetivo do professor: abrir o app no celular, no computador e no iPhone com o m
 - Troca de senha: primeiro muda a senha no servidor, depois recriptografa imagens e envia o cofre com o sal novo. Outros aparelhos percebem o sal diferente e saem com o aviso "A senha desta conta foi trocada em outro aparelho". Imagem guardada com a chave antiga é buscada de novo no servidor (`imageBytes`).
 - Apagar conta: apaga as linhas do professor no servidor (o usuário do Auth fica; o mesmo nome de usuário só volta a funcionar com a mesma senha).
 
+## Desde a 1.5
+
+- Cofre v3 (ver SKILL.md): `mesmaChave(blob)` compara o `kid`; se outro aparelho converteu o cofre (kid diferente), este aparelho sai e pede login. Troca de senha não derruba os outros aparelhos na hora: eles saem quando a sessão do Supabase vence (`authFail` no `syncSignIn`).
+- `recuperacao` (hash do verificador da chave) + função `recuperar_conta(p_email, p_verificador, p_nova_senha)` (security definer, `extensions.crypt` + `gen_salt('bf')`). "Esqueci a senha" (`recuperarConta`): RPC → entra → baixa o cofre → `openWithRecovery` → nova senha. Sem servidor, recupera só o cofre local.
+- `sugestoes`: "Fale conosco" grava tipo, texto, contato opcional, versão e aparelho (anon e logado podem inserir; ninguém lê pela API, só pelo Table Editor). **Não é cifrado**: o app pede para não colocar nomes de alunos.
+- O professor precisa **rodar o `configurar.sql` de novo** a cada versão que acrescentar tabelas (o arquivo é seguro para rodar várias vezes).
+
 ## Configuração (o professor faz, com orientação)
 
 1. Criar conta em https://supabase.com e um projeto (região São Paulo, plano gratuito).
