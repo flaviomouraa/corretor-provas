@@ -13,7 +13,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 ## Pendências
 
-- **Sincronização entre aparelhos**: ligada na versão 1.2 com o projeto Supabase `imkikvxszvxucdowyvyl` (URL e publishable key em `SUPA`, `index.html`). O domínio supabase.co é bloqueado no ambiente na nuvem, então **ainda não foi confirmado com o servidor real**: não deu para verificar daqui se o professor rodou `supabase/configurar.sql` e desligou "Confirm email". Primeira tentativa do professor (29/10, no site pelo PC) deu "Não consegui criar a conta no servidor" sem detalhe; a 1.2.1 mostra o motivo exato na aba Conta. Peça o print desse texto.
+- **Sincronização entre aparelhos**: **funcionando com o servidor real** desde 29/10/2026 (conta `flavio.moura` criada no site pelo PC, aba Conta mostrou "ativa"). Foi preciso desligar "Confirm email" e apagar o usuário pendente no Supabase. Falta o professor entrar no celular (APK 1.2.1) com a mesma conta e trazer os dados antigos do celular pelo backup (Conta → Restaurar backup, que junta).
 - **Chave de assinatura permanente do APK**: ainda não configurada. Os segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` não existem; cada build sai com chave de depuração descartável. A chave gerada na sessão original (`android/keystore/`) estava fora do git e pode ter se perdido: se não existir, gere outra com `keytool` (alias `corretor`) e guie o professor a criar os dois segredos. Oferecido ao professor em 28/10/2026, sem resposta ainda.
 - **Teste em aparelho real**: o APK e a leitura com fotos reais ainda não foram confirmados pelo professor. Se ele mandar uma foto que falhou, siga "Quando a leitura falha numa foto real" no SKILL.md.
 
