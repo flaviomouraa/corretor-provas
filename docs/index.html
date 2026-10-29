@@ -423,6 +423,7 @@ function explain(e) {
   const m = `${e && e.message} ${e && e.code}`;
   if (/schema cache|does not exist|PGRST205|42P01/i.test(m)) return "Falta criar as tabelas no Supabase: rode o arquivo configurar.sql no SQL Editor.";
   if (/permission denied|42501|row-level security/i.test(m)) return "O Supabase recusou o acesso às tabelas: rode o configurar.sql de novo no SQL Editor.";
+  if (/email.*rate limit|over_email_send_rate_limit/i.test(m)) return "O Supabase está tentando mandar e-mail de confirmação. Desligue “Confirm email” em Authentication → Sign In / Providers → Email, apague o usuário pendente em Authentication → Users e toque em Tentar de novo.";
   if (/rate limit|over_.*limit/i.test(m)) return "O Supabase bloqueou novas contas por alguns minutos (limite de segurança). Tento de novo sozinho.";
   if (/signup.*(disabled|not allowed)|signup_disabled/i.test(m)) return "O cadastro está desligado no Supabase: em Authentication → Sign In / Providers, ative “Allow new users to sign up”.";
   if (/email.*invalid|email_address_invalid/i.test(m)) return `O Supabase recusou o e-mail interno da conta (${e.message}).`;
