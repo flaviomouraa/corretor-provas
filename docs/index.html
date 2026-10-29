@@ -344,7 +344,7 @@ async function vaultBlob(id) { // a versão mais recente entre nuvem e aparelho
    servidor usamos uma senha derivada (PBKDF2 com outro sal) da senha do
    professor: o servidor nunca vê a senha real nem a chave do cofre.
    ============================================================ */
-const SUPA = { url: "", key: "" }; // projeto Supabase do professor (a chave pública pode ficar no código)
+const SUPA = { url: "https://imkikvxszvxucdowyvyl.supabase.co", key: "sb_publishable_QvhyTYiDhp2ZuEsQ8n2ECg_SOnV1c_E" }; // projeto Supabase do professor (chave pública: a proteção vem das regras por linha)
 const sync = { on: false, token: null, exp: 0, uid: null, email: null, authPw: null, remoteT: 0, dirty: false, last: 0, err: "", pendingImgs: new Set() };
 const syncEnabled = () => !IN_CLAUDE && !!SUPA.url && !!SUPA.key;
 async function authSecret(user, pw) {
