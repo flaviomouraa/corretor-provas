@@ -46,7 +46,7 @@ Antes de entregar, olhe a tela: tire um screenshot com Playwright (largura 400px
 2. Suba `versionCode`/`versionName`, rode `python3 tools/build_pwa.py`, atualize `references/estado-atual.md` e faça commit + push (mensagem em português, dizendo o que mudou). Mudanças só de documentação levam `[skip ci]` para não gerar APK.
 3. Espere o APK **da sua commit** (filtre por `head_sha`; o `releases/latest` pode ainda ser o anterior), baixe, confira que contém a mudança (`unzip -p … assets/index.html | grep …`) e mande com SendUserFile.
 4. Republique o Artifact (`index.html`, mesmas capacidades) para o link no Claude ficar igual.
-5. Responda curto: o que mudou (em tópicos), o que foi testado (com números), o que muda para ele e como instalar (Sincronizar agora → desinstalar → instalar → **Entrar** com a mesma conta).
+5. Responda curto: o que mudou (em tópicos), o que foi testado (com números), o que muda para ele e como instalar (desde a 1.5.2 o APK **instala por cima**, sem desinstalar; confira a assinatura com `scripts/conferir_assinatura.py`).
 
 ## Regras que não podem quebrar
 

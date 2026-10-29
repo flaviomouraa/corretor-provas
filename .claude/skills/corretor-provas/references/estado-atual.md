@@ -6,7 +6,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 | Onde | Endereço | Versão |
 |---|---|---|
-| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.5 (versionCode 8): + chave de recuperação, cofre v3, Fale conosco, boas-vindas, aceite dos termos, páginas públicas |
+| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.5.2 (versionCode 10), assinado com a chave permanente: + chave de recuperação, cofre v3, Fale conosco, boas-vindas, aceite dos termos, páginas públicas |
 | Site instalável / iPhone | https://flaviomouraa.github.io/corretor-provas/ | gerado de `docs/`; Pages **ativo** (confirmado em 29/10/2026) |
 | Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | mesmo código da versão atual, capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
 | Apresentação / Privacidade / Termos | https://flaviomouraa.github.io/corretor-provas/apresentacao/index.html (e /privacidade/, /termos/) | 1.5 |
@@ -15,12 +15,11 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 ## Pendências
 
 - **Rodar de novo o `supabase/configurar.sql`** (1.5 acrescentou `recuperacao`, `recuperar_conta` e `sugestoes`). Sem isso: "Fale conosco" falha e a recuperação só funciona no próprio aparelho.
-- **Segredos do GitHub para a chave permanente** (`ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASS`): arquivo com os valores entregue ao professor em 29/10/2026. Depois que ele criar, o próximo APK sai assinado com a chave permanente (uma última desinstalação) e daí em diante instala por cima. Impressão digital SHA-256 da chave: 12:EA:E7:AC:…:E4:75.
+- ~~Chave de assinatura permanente~~: **feita** em 29/10/2026 (APK 1.5.2, `apk-11`). A 1.5.2 foi a última instalação que exigiu desinstalar; daqui em diante, atualizações instalam por cima.
 - **Textos legais**: completar identificação do responsável (nome/CNPJ/e-mail) e revisar com advogado antes do lançamento amplo.
 - **Plano comercial** (conversado em 29/10): etapa 1 feita na 1.5; próximas: teste com 10–30 professores, repositório privado + Cloudflare/Netlify, Play Store, plano Pro (Mercado Pago/Stripe), painel da coordenação.
 
 - **Sincronização entre aparelhos**: **funcionando com o servidor real** desde 29/10/2026 (conta `flavio.moura` criada no site pelo PC, aba Conta mostrou "ativa"). Foi preciso desligar "Confirm email" e apagar o usuário pendente no Supabase. Falta confirmar que o professor entrou no celular com a mesma conta (Entrar, não Criar conta) e, se havia dados antigos só no celular, trouxe pelo backup (Conta → Restaurar backup, que junta).
-- **Chave de assinatura permanente do APK**: ainda não configurada. Os segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` não existem; cada build sai com chave de depuração descartável. A chave gerada na sessão original (`android/keystore/`) estava fora do git e pode ter se perdido: se não existir, gere outra com `keytool` (alias `corretor`) e guie o professor a criar os dois segredos. Oferecido ao professor em 28/10/2026, sem resposta ainda.
 - **Teste em aparelho real**: o APK e a leitura com fotos reais ainda não foram confirmados pelo professor. Se ele mandar uma foto que falhou, siga "Quando a leitura falha numa foto real" no SKILL.md.
 
 ## Histórico de pedidos do professor (o que ele valoriza)

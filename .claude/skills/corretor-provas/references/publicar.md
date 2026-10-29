@@ -39,16 +39,13 @@ O APK é só para Android. No iPhone use a PWA (App Store exige conta Apple de U
 
 - Projeto em `android/`: `MainActivity.java` abre `docs/` (embutido como assets) via `WebViewAssetLoader`, liga `<input capture>` à câmera (FileProvider, sem permissão de câmera) e expõe `AndroidBridge.saveFile(nome, base64, mime)` (Downloads › Corretor de Provas; Android 9 ou anterior: compartilhar).
 - **Pelo GitHub (recomendado)**: o workflow `.github/workflows/apk.yml` roda a cada push que muda o app ou `android/` (ou manualmente em Actions → Gerar APK → Run workflow) e publica `corretor-de-provas.apk` em **Releases**.
-- **Assinatura**: para instalar atualizações por cima sem perder dados, todas as versões precisam da mesma chave. Ela foi gerada em `android/keystore/corretor.jks` (senha em `senha.txt`), fora do git, e se perde quando a sessão na nuvem acaba. Para o GitHub usar a mesma chave, crie os segredos do repositório (Settings → Secrets and variables → Actions):
-  - `ANDROID_KEYSTORE_B64` = saída de `base64 -w0 android/keystore/corretor.jks`
-  - `ANDROID_KEYSTORE_PASS` = conteúdo de `android/keystore/senha.txt`
-  Sem esses segredos, o workflow assina com uma chave de depuração descartável; nesse caso, atualizar exige desinstalar (e o professor perde os dados se não tiver backup).
+- **Assinatura permanente: configurada em 29/10/2026** (segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` no repositório; primeiro APK assinado: 1.5.2, tag `apk-11`). SHA-256 do certificado: `12:EA:E7:AC:E5:CF:96:AC:F0:FB:06:00:30:0A:AE:DC:4C:03:1B:06:13:C6:11:1B:6E:63:3C:C5:B0:74:E4:75`. A página de cada versão (Releases) diz "Assinatura: permanente (…)" ou "descartável (motivo)", e `scripts/conferir_assinatura.py <apk>` confere por dentro. Se um dia sair "descartável", os segredos sumiram ou estão errados: o professor tem os arquivos `segredo-1-ANDROID_KEYSTORE_PASS.txt` (24 caracteres) e `segredo-2-ANDROID_KEYSTORE_B64.txt` (3.560 caracteres) para recriá-los. **Nunca gere outra chave**: isso obrigaria todos os professores a desinstalar o app.
 - **Localmente**: só funciona se `dl.google.com` estiver liberado na rede do ambiente (SDK Android). Depois: instalar o SDK (platform 34, build-tools), `cd android && ./gradlew assembleRelease`.
 - A cada versão nova, aumente `versionCode` e `versionName` em `android/app/build.gradle`.
 
 Instalar o APK: baixar no celular, abrir o arquivo e permitir "instalar apps desconhecidos" para o navegador ou o app de arquivos.
 
-Enquanto a chave permanente não estiver nos segredos do GitHub, **cada build tem assinatura diferente** e o Android não instala por cima. Oriente sempre, ao entregar uma versão nova: (1) Conta → Baixar backup; (2) desinstalar o app antigo; (3) instalar o novo; (4) Criar conta → Restaurar um backup.
+Com a chave permanente, **versões novas instalam por cima** (o Android só exige `versionCode` maior). Antes de entregar, confira com `conferir_assinatura.py` que o APK tem a impressão digital acima.
 
 Para acompanhar a compilação daqui (API pública, sem login):
 ```bash
