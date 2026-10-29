@@ -6,7 +6,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 | Onde | Endereço | Versão |
 |---|---|---|
-| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.3 (versionCode 5), com sincronização, sem zoom e escolha de cores |
+| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.3.1 (versionCode 6), com sincronização, sem zoom, escolha de cores e letras nas bolinhas do cartão |
 | Site instalável / iPhone | https://flaviomouraa.github.io/corretor-provas/ | gerado de `docs/`; Pages **ativo** (confirmado em 29/10/2026) |
 | Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | versão 4, capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
 | Código | https://github.com/flaviomouraa/corretor-provas (público, ramo `main`) | |
@@ -29,6 +29,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 8. Versão 1.1: campos do cadastro não podem se sobrepor; **gabarito todo na vertical** ao marcar as respostas certas; **gráfico de pizza** em Resultados (notas por faixa / tipo de resposta).
 9. "Gostei bastante do app": manter o visual e o funcionamento atuais.
 11. 1.3: o app "dava zoom" em alguns momentos no celular → zoom desligado; opção de **mudar a cor do app** (6 cores + automático/claro/escuro, na aba Conta).
+12. 1.3.1: **letras clarinhas dentro das bolinhas** do cartão-resposta, para facilitar a marcação dos alunos.
 10. Abrir o app no **computador** com os mesmos dados do celular → escolheu a opção de **sincronização própria** (Supabase, dados cifrados no aparelho).
 
 ## Funcionalidades atuais (resumo)

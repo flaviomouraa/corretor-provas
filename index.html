@@ -705,6 +705,8 @@ function finderSVG(cx, cy) {
   return `<path d="M${x} ${y}h${s}v${s}h${-s}z M${x + 1.5} ${y + 1.5}v6h6v-6z" fill="#000" fill-rule="evenodd"/><rect x="${x + 3}" y="${y + 3}" width="3" height="3" fill="#000"/>`;
 }
 const SVGF = 'font-family="Arial, Helvetica, sans-serif"';
+/* letra clarinha dentro de cada bolinha (ajuda o aluno; clara o bastante para não atrapalhar a leitura) */
+const LETRA_BOLHA = { cor: "#C9C9C9", tam: 2.3 };
 function blockInner(g) {
   const L = blockLayout(g.nQ, g.nAlt), uw = L.W - 2 * L.m;
   let s = `<rect width="${L.W}" height="${L.H}" fill="#fff"/>`;
@@ -713,7 +715,10 @@ function blockInner(g) {
   for (const hx of L.heads) for (let a = 0; a < g.nAlt; a++) s += `<text x="${(hx + a * BLK.dx).toFixed(2)}" y="${L.headY + 1.1}" ${SVGF} font-size="3" font-weight="700" text-anchor="middle">${LET[a]}</text>`;
   for (const q of L.q) {
     s += `<text x="${q.nx.toFixed(2)}" y="${(q.y + 1.1).toFixed(2)}" ${SVGF} font-size="3" font-weight="700" text-anchor="end">${String(q.n).padStart(2, "0")}</text>`;
-    for (const bx of q.b) s += `<circle cx="${bx.toFixed(2)}" cy="${q.y.toFixed(2)}" r="${BLK.r}" fill="none" stroke="#000" stroke-width="0.28"/>`;
+    q.b.forEach((bx, a) => {
+      s += `<text x="${bx.toFixed(2)}" y="${(q.y + LETRA_BOLHA.tam * 0.36).toFixed(2)}" ${SVGF} font-size="${LETRA_BOLHA.tam}" fill="${LETRA_BOLHA.cor}" text-anchor="middle">${LET[a]}</text>`;
+      s += `<circle cx="${bx.toFixed(2)}" cy="${q.y.toFixed(2)}" r="${BLK.r}" fill="none" stroke="#000" stroke-width="0.28"/>`;
+    });
   }
   codeBitsOf(g.code).forEach((b, i) => {
     const x = L.m + unitBitX(i) * uw;

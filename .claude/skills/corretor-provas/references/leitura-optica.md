@@ -8,6 +8,7 @@ Gerado por `blockSVG(g)` / `blockLayout(nQ, nAlt)` em `index.html`.
 - **Barra de orientação**: retângulo 20×4 mm no meio da borda de cima, centrado na altura dos marcadores. Serve para saber qual lado é o de cima (a foto pode estar girada).
 - **Código** (12 bits) na faixa de baixo, entre os marcadores de baixo: 9 bits de identificação do gabarito (1 a 511) + 3 bits de verificação (soma dos bits % 8). Quadrados de 3,6 mm. As posições são **frações** da distância entre os centros dos marcadores (`unitBitX`), para serem lidas antes de saber o tamanho do cartão: 6 à esquerda e 6 à direita do centro, deixando o centro branco (é onde a orientação compara "barra" × "vazio").
 - **Bolinhas**: raio 2,2 mm, 6 mm entre alternativas, 7 mm entre linhas, número da questão à esquerda, letras A–E em cima de cada coluna. Até 60 questões usa colunas de 15 linhas; acima disso, colunas de 25 (máximo 100 questões, 4 colunas).
+- **Letra clarinha dentro de cada bolinha** (desde a 1.3.1, pedido do professor): `LETRA_BOLHA` (cinza #C9C9C9, 2,3 mm). Não muda a geometria; cartões antigos sem letra continuam sendo lidos. Testado com letras até #888888 (fotocópia escura) em 108 fotos sem erro, porque a leitura compara cada bolinha com a mais clara da mesma questão. Não escureça mais do que isso nem aumente a letra.
 - Largura mínima 84 mm (para caber o código). O PNG para o Word sai a 300 dpi com bloco `pHYs`, então entra no Word no tamanho real.
 
 ## Algoritmo (funções em `index.html`)
