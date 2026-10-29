@@ -3,12 +3,14 @@ package br.com.corretordeprovas;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -56,6 +58,11 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
+        // sem zoom: nem de pinça, nem de toque duplo, nem pelo tamanho de fonte do sistema
+        s.setSupportZoom(false);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
+        s.setTextZoom(100);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -182,6 +189,24 @@ public class MainActivity extends Activity {
                 avisar("Não consegui salvar o arquivo.");
                 return "error";
             }
+        }
+
+        /** Pinta as barras do sistema com a cor de fundo do app (modo claro/escuro escolhido no app). */
+        @JavascriptInterface
+        public void setBarColor(String cor, boolean claro) {
+            runOnUiThread(() -> {
+                try {
+                    int c = Color.parseColor(cor);
+                    getWindow().setStatusBarColor(c);
+                    getWindow().setNavigationBarColor(c);
+                    View d = getWindow().getDecorView();
+                    int f = d.getSystemUiVisibility();
+                    if (Build.VERSION.SDK_INT >= 23) f = claro ? (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+                    if (Build.VERSION.SDK_INT >= 26) f = claro ? (f | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                    d.setSystemUiVisibility(f);
+                    web.setBackgroundColor(c);
+                } catch (Exception ignored) { }
+            });
         }
 
         private void avisar(String msg) {

@@ -6,7 +6,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 | Onde | Endereço | Versão |
 |---|---|---|
-| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.2.1 (versionCode 4), com sincronização |
+| APK Android (o professor usa este) | https://github.com/flaviomouraa/corretor-provas/releases (tag mais recente) | 1.3 (versionCode 5), com sincronização, sem zoom e escolha de cores |
 | Site instalável / iPhone | https://flaviomouraa.github.io/corretor-provas/ | gerado de `docs/`; Pages **ativo** (confirmado em 29/10/2026) |
 | Página no Claude | https://claude.ai/artifact/XXH4UAdMZHsmb9qsreS3U6 | versão 4, capacidades `db`, `downloads`, `user`; link compartilhado como "qualquer pessoa com o link" |
 | Código | https://github.com/flaviomouraa/corretor-provas (público, ramo `main`) | |
@@ -28,6 +28,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 7. Transformar o trabalho numa **skill** (esta) e mantê-la atualizada.
 8. Versão 1.1: campos do cadastro não podem se sobrepor; **gabarito todo na vertical** ao marcar as respostas certas; **gráfico de pizza** em Resultados (notas por faixa / tipo de resposta).
 9. "Gostei bastante do app": manter o visual e o funcionamento atuais.
+11. 1.3: o app "dava zoom" em alguns momentos no celular → zoom desligado; opção de **mudar a cor do app** (6 cores + automático/claro/escuro, na aba Conta).
 10. Abrir o app no **computador** com os mesmos dados do celular → escolheu a opção de **sincronização própria** (Supabase, dados cifrados no aparelho).
 
 ## Funcionalidades atuais (resumo)
@@ -37,5 +38,5 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 - Cartão-resposta: imagem PNG 300 dpi para o Word e folha A4 em PDF; código do gabarito impresso no cartão.
 - Correção: foto (câmera ou galeria) → conferência com a imagem lida, toque para corrigir, aluno e turma, salvar e fotografar a próxima; plano B de marcar os cantos com zoom.
 - Resultados: filtros por prova e turma; média, maior e menor nota; gráficos de notas por aluno, distribuição, **pizza (faixas / tipo de resposta)**, evolução da turma; tabela de alunos (abre o cartão salvo); acertos por questão; planilha CSV; baixar gráficos em PNG.
-- Conta: backup criptografado (inclui imagens), restaurar, trocar senha, apagar conta.
+- Conta: aparência (cor e claro/escuro, por aparelho), sincronização, backup criptografado (inclui imagens), restaurar, trocar senha, apagar conta.
 - Exemplos (2 provas, 14 alunos da "6º B (exemplo)") em toda conta nova, com botão "Apagar exemplos".

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#2340C4">
 <meta name="description" content="Corrija provas de múltipla escolha fotografando o cartão-resposta.">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -71,6 +71,9 @@ h2 { font-size: 1.2rem; font-weight: 600; }
 h3 { font-size: 1.02rem; font-weight: 600; }
 p { margin: 0; }
 button, input, select { font: inherit; color: inherit; }
+/* campos com menos de 16px fazem o celular dar zoom ao tocar; toque duplo também dá zoom */
+input, select, textarea { font-size: 16px !important; }
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .inner { max-width: 880px; margin: 0 auto; }
@@ -182,6 +185,11 @@ tr.click:hover td { background: var(--sunk); }
 .seg button { border: 0; background: transparent; border-radius: 999px; min-height: 40px; font-weight: 700; color: var(--muted); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .err { color: var(--bad); font-weight: 700; font-size: 0.9rem; }
+.seg.tres { grid-template-columns: repeat(3, 1fr); max-width: 420px; }
+.cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.cor { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; cursor: pointer; }
+.cor[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.cor .amostra { width: 20px; height: 20px; border-radius: 50%; flex: none; background: linear-gradient(135deg, var(--a) 50%, var(--b) 50%); }
 
 .modal-back { position: fixed; inset: 0; z-index: 20; background: rgba(8, 12, 24, 0.55); display: grid; place-items: end center;
   padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
@@ -282,6 +290,45 @@ async function deriveKey(pw, salt, iter = ITER) {
 async function encBytes(key, bytes) { const iv = crypto.getRandomValues(new Uint8Array(12)); return { iv, ct: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes) }; }
 async function decBytes(key, o) { return crypto.subtle.decrypt({ name: "AES-GCM", iv: o.iv }, key, o.ct); }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
+
+/* Aparência: cor de destaque e modo claro/escuro, guardados neste aparelho */
+const APAR_KEY = "corretor-provas.aparencia";
+const CORES = {
+  azul:    { nome: "Azul",    l: "#2340C4", d: "#8EA2FF" },
+  verde:   { nome: "Verde",   l: "#12715A", d: "#5DD3A6" },
+  roxo:    { nome: "Roxo",    l: "#6639C2", d: "#B79CFF" },
+  vinho:   { nome: "Vinho",   l: "#A1234A", d: "#FF8FB0" },
+  laranja: { nome: "Laranja", l: "#AE4E08", d: "#FFAE68" },
+  grafite: { nome: "Grafite", l: "#2F3A4F", d: "#C2CAD8" },
+};
+function mix(a, b, t) { // mistura duas cores hex (t = quanto de b)
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+function aparenciaCSS() {
+  let css = "";
+  for (const [id, c] of Object.entries(CORES)) {
+    const light = `--accent:${c.l};--accent-ink:#FFFFFF;--accent-soft:${mix(c.l, "#FFFFFF", 0.85)};--seq1:${mix(c.l, "#FFFFFF", 0.75)};--seq2:${mix(c.l, "#FFFFFF", 0.5)};--seq3:${mix(c.l, "#FFFFFF", 0.22)};--seq4:${mix(c.l, "#000000", 0.12)};`;
+    const dark = `--accent:${c.d};--accent-ink:#0E1320;--accent-soft:${mix(c.d, "#161D2D", 0.72)};--seq1:${mix(c.d, "#161D2D", 0.72)};--seq2:${mix(c.d, "#161D2D", 0.45)};--seq3:${mix(c.d, "#161D2D", 0.15)};--seq4:${mix(c.d, "#FFFFFF", 0.35)};`;
+    css += `:root[data-cor="${id}"]{${light}}@media (prefers-color-scheme: dark){:root[data-cor="${id}"]:not([data-theme="light"]){${dark}}}:root[data-theme="dark"][data-cor="${id}"]{${dark}}`;
+  }
+  return css;
+}
+function lerAparencia() { try { return { cor: "azul", modo: "auto", ...JSON.parse(ls.get(APAR_KEY) || "{}") }; } catch { return { cor: "azul", modo: "auto" }; } }
+function aplicarAparencia(a = lerAparencia()) {
+  let st = document.getElementById("estilo-cores");
+  if (!st) { st = document.createElement("style"); st.id = "estilo-cores"; st.textContent = aparenciaCSS(); document.head.appendChild(st); }
+  const root = document.documentElement;
+  root.dataset.cor = CORES[a.cor] ? a.cor : "azul";
+  if (a.modo === "claro") root.dataset.theme = "light"; else if (a.modo === "escuro") root.dataset.theme = "dark"; else if (!IN_CLAUDE) delete root.dataset.theme;
+  const fundo = getComputedStyle(root).getPropertyValue("--surface").trim() || "#FFFFFF";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = fundo;
+  const claro = parseInt(fundo.slice(1, 3), 16) > 128; // fundo claro → ícones escuros na barra
+  try { if (window.AndroidBridge && window.AndroidBridge.setBarColor) window.AndroidBridge.setBarColor(fundo, claro); } catch {}
+}
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => aplicarAparencia()); } catch {}
 const HAS_GZ = typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined";
 async function gz(bytes, compress) {
   const st = new Blob([bytes]).stream().pipeThrough(compress ? new CompressionStream("gzip") : new DecompressionStream("gzip"));
@@ -1891,6 +1938,11 @@ function renderAccount(v) {
       <p class="small muted">Use o mesmo usuário e senha no celular, no computador ou no iPhone: gabaritos, notas e imagens dos cartões aparecem em todos. Tudo é enviado já criptografado com a sua senha; nem o servidor consegue ler.</p>
       <p class="small" id="sync-note">${esc(syncText())}</p>
       <div><button class="btn" type="button" id="sx-sync" ${sync.on || sync.authPw ? "" : "disabled"}>${sync.on ? "Sincronizar agora" : "Tentar de novo"}</button></div></div>` : ""}
+    <div class="panel"><h3>Aparência</h3>
+      <p class="small muted">Escolha a cor do app neste aparelho.</p>
+      <div class="cores" role="radiogroup" aria-label="Cor do app">${Object.entries(CORES).map(([id, c]) => `<button type="button" class="cor" role="radio" data-cor-id="${id}" aria-checked="${lerAparencia().cor === id}" aria-label="${c.nome}"><span class="amostra" style="--a:${c.l};--b:${c.d}"></span>${c.nome}</button>`).join("")}</div>
+      <div class="seg tres" role="group" aria-label="Claro ou escuro">${[["auto", "Automático"], ["claro", "Claro"], ["escuro", "Escuro"]].map(([id, n]) => `<button type="button" data-modo="${id}" aria-pressed="${lerAparencia().modo === id}">${n}</button>`).join("")}</div>
+    </div>
     <div class="panel"><h3>Backup</h3>
       <p class="small muted">O backup reúne gabaritos, notas e imagens dos cartões num arquivo criptografado, que só abre com a senha em uso quando você o gerou. Guarde-o no seu e-mail ou Drive para não perder nada se trocar de celular.</p>
       <div class="row"><button class="btn primary" type="button" id="sx-exp">Baixar backup</button><button class="btn" type="button" id="sx-imp">Restaurar backup</button></div>
@@ -1913,6 +1965,9 @@ function renderAccount(v) {
     if (await saveFile(`backup-corretor-${slug((S.data.user && S.data.user.username) || "conta")}-${new Date().toISOString().slice(0, 10)}.json`, blob)) toast("Backup pronto");
   };
   $("#sx-imp").onclick = () => { S.importMode = "merge"; $("#file-backup").click(); };
+  const salvarAparencia = (mud) => { const a = { ...lerAparencia(), ...mud }; ls.set(APAR_KEY, JSON.stringify(a)); aplicarAparencia(a); const y = window.scrollY; render(); window.scrollTo(0, y); };
+  v.querySelectorAll("[data-cor-id]").forEach((b) => (b.onclick = () => salvarAparencia({ cor: b.dataset.corId })));
+  v.querySelectorAll("[data-modo]").forEach((b) => (b.onclick = () => salvarAparencia({ modo: b.dataset.modo })));
   const sb = $("#sx-sync");
   if (sb) sb.onclick = async () => { sb.disabled = true; $("#sync-note").textContent = "Sincronizando…"; sync.dirty = true; await syncNow(); if (!sync.err && sync.on) toast("Tudo sincronizado"); render(); };
   $("#sx-pw").onsubmit = async (e) => {
@@ -1980,6 +2035,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && sy
 window.addEventListener("online", () => { if (sync.on && S.key) syncNow(); });
 ["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => (S.lastActive = Date.now()), { passive: true }));
 setInterval(() => { if (S.key && Date.now() - S.lastActive > AUTOLOCK_MIN * 60000) logout("Você saiu por inatividade. Entre de novo para continuar."); }, 20000);
+aplicarAparencia();
 renderLock();
 </script>
 
