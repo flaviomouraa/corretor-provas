@@ -1,0 +1,31 @@
+# Sincronização entre aparelhos (Supabase)
+
+Objetivo do professor: abrir o app no celular, no computador e no iPhone com o mesmo usuário e senha e ver os mesmos gabaritos, notas e imagens.
+
+## Como funciona
+
+- Só fora do Claude (PWA e APK). No Claude continua o `db` da conta Claude. Ligada quando `SUPA.url`/`SUPA.key` (início do bloco "Sincronização" em `index.html`) estão preenchidos; a chave é a *publishable/anon key*, pública por natureza (a proteção vem das regras de acesso por linha).
+- Conta no Supabase: e-mail fictício `u<acctId>@corretor-provas.app` e senha `authSecret(usuário, senha)` = PBKDF2(senha, "corretor-provas/sync/<usuário>", 150 mil). O servidor nunca vê a senha real nem a chave do cofre.
+- Tabelas (`supabase/configurar.sql`): `cofres` (1 linha por professor: `blob` = o mesmo cofre cifrado do aparelho, `t` = hora da gravação) e `imagens` (id da prova, `iv`, `ct`). RLS: cada usuário só lê/grava as próprias linhas.
+- Sem biblioteca: `fetch` direto na API do Supabase (`/auth/v1/signup`, `/auth/v1/token?grant_type=password`, `PUT /auth/v1/user`, `/rest/v1/cofres`, `/rest/v1/imagens` com `Prefer: resolution=merge-duplicates`).
+- Fluxo: `persist()` grava local e marca `sync.dirty`; `syncNow()` (fila única) chama `doSync()`: baixa o cofre do servidor; se mudou desde a última vez (`t > sync.remoteT`), abre com a chave atual e junta (`mergeData`); envia se havia mudança local. Roda a cada 60 s, ao voltar para o app e quando a internet volta.
+- `mergeData`: por id, fica a versão com maior `upd` (ou `edited`/`created`); `deleted` guarda exclusões (id → hora) por 180 dias e vence versões mais antigas.
+- Login (`login` → `syncStart`): abre o cofre local se houver; entra no servidor; se a conta não existe lá mas abriu localmente, cria (`syncSignUp`) e envia; se existe, baixa e junta. Sem internet, entra com o cofre local e sincroniza no próximo login online.
+- Troca de senha: primeiro muda a senha no servidor, depois recriptografa imagens e envia o cofre com o sal novo. Outros aparelhos percebem o sal diferente e saem com o aviso "A senha desta conta foi trocada em outro aparelho". Imagem guardada com a chave antiga é buscada de novo no servidor (`imageBytes`).
+- Apagar conta: apaga as linhas do professor no servidor (o usuário do Auth fica; o mesmo nome de usuário só volta a funcionar com a mesma senha).
+
+## Configuração (o professor faz, com orientação)
+
+1. Criar conta em https://supabase.com e um projeto (região São Paulo, plano gratuito).
+2. SQL Editor → colar `supabase/configurar.sql` → Run.
+3. Authentication → Sign In / Providers → Email: **desligar "Confirm email"** (os e-mails são fictícios).
+4. Project Settings → API (ou "API Keys"): copiar **Project URL** e a **publishable key** (ou "anon public"). Nunca pedir a *secret/service_role key*.
+5. Colocar os dois valores em `SUPA` no `index.html`, rodar os testes, `build_pwa.py`, subir `versionCode`, commit e push (gera o APK).
+
+## Problemas comuns
+
+- "pede confirmação de e-mail": passo 3 não foi feito.
+- Login diz senha incorreta logo após ativar: a conta pode ter sido criada em outro aparelho com outra senha; use a senha daquele aparelho.
+- Plano gratuito do Supabase pausa o projeto após ~7 dias sem uso: o app continua funcionando localmente e mostra "Não consegui sincronizar"; o professor reativa no painel do Supabase (Restore project).
+- Limite gratuito: 500 MB de banco. Cada imagem de cartão cifrada ocupa ~40–60 KB.
+- Teste local: `scripts/testar_sincronizacao.js` sobe um servidor que imita o Supabase (o domínio supabase.co costuma estar bloqueado no ambiente na nuvem).

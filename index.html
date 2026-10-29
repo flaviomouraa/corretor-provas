@@ -321,6 +321,153 @@ async function vaultBlob(id) { // a versão mais recente entre nuvem e aparelho
   return local;
 }
 
+/* ============================================================
+   Sincronização entre aparelhos (Supabase), fora do Claude.
+   O servidor só recebe o cofre e as imagens JÁ CIFRADOS. Para entrar no
+   servidor usamos uma senha derivada (PBKDF2 com outro sal) da senha do
+   professor: o servidor nunca vê a senha real nem a chave do cofre.
+   ============================================================ */
+const SUPA = { url: "", key: "" }; // projeto Supabase do professor (a chave pública pode ficar no código)
+const sync = { on: false, token: null, exp: 0, uid: null, email: null, authPw: null, remoteT: 0, dirty: false, last: 0, err: "", pendingImgs: new Set() };
+const syncEnabled = () => !IN_CLAUDE && !!SUPA.url && !!SUPA.key;
+async function authSecret(user, pw) {
+  const base = await crypto.subtle.importKey("raw", te.encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: te.encode("corretor-provas/sync/" + normUser(user)), iterations: 150000, hash: "SHA-256" }, base, 256);
+  return b64(bits).replace(/=+$/, "");
+}
+const syncEmail = async (user) => `u${await acctId(user)}@corretor-provas.app`;
+function syncErr(msg, code) { const e = new Error(msg); e.code = code; e.userMsg = msg; return e; }
+async function supa(path, { method = "GET", body, auth = true, prefer } = {}) {
+  const h = { apikey: SUPA.key, "Content-Type": "application/json" };
+  if (auth && sync.token) h.Authorization = "Bearer " + sync.token;
+  if (prefer) h.Prefer = prefer;
+  let r;
+  try { r = await fetch(SUPA.url.replace(/\/+$/, "") + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) }); }
+  catch { throw syncErr("Sem conexão com a internet.", "offline"); }
+  const txt = await r.text(); let data = null; try { data = txt ? JSON.parse(txt) : null; } catch {}
+  if (!r.ok) {
+    const msg = String((data && (data.msg || data.message || data.error_description || data.error)) || r.status);
+    const e = new Error(msg); e.status = r.status; e.code = (data && (data.error_code || data.code)) || ""; throw e;
+  }
+  return data;
+}
+function setSession(d) { sync.token = d.access_token; sync.uid = d.user.id; sync.exp = Date.now() + ((d.expires_in || 3600) - 60) * 1000; }
+async function syncSignIn() { setSession(await supa("/auth/v1/token?grant_type=password", { method: "POST", auth: false, body: { email: sync.email, password: sync.authPw } })); }
+async function syncSignUp() {
+  try {
+    const d = await supa("/auth/v1/signup", { method: "POST", auth: false, body: { email: sync.email, password: sync.authPw } });
+    if (d && d.access_token) return setSession(d);
+    await syncSignIn();
+  } catch (e) {
+    if (/already|registered|exists/i.test(e.message) || e.code === "user_already_exists") throw syncErr("Este usuário já existe. Use a opção Entrar.", "exists");
+    if (/confirm/i.test(e.message)) throw syncErr("O servidor de sincronização pede confirmação de e-mail. Desative em Authentication → Sign In / Providers → Email → Confirm email.", "confirm");
+    throw e;
+  }
+}
+async function api(path, opts) {
+  if (!sync.token || Date.now() > sync.exp) await syncSignIn();
+  try { return await supa(path, opts); }
+  catch (e) { if (e.status === 401) { sync.token = null; await syncSignIn(); return supa(path, opts); } throw e; }
+}
+async function remoteVault() { const rows = await api(`/rest/v1/cofres?select=blob,t&user_id=eq.${sync.uid}`); return rows && rows[0] ? rows[0] : null; }
+async function pushVault() {
+  const t = Date.now(), blob = await sealVault(S.key, S.salt, S.data);
+  await api("/rest/v1/cofres", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, blob, t } });
+  ls.set(PREFIX + S.acct, blob);
+  sync.remoteT = t; sync.dirty = false; sync.last = Date.now(); sync.err = "";
+}
+async function openWithKey(blob, key) {
+  const o = JSON.parse(blob);
+  let pt = new Uint8Array(await decBytes(key, { iv: unb64(o.iv), ct: unb64(o.ct) }));
+  if (o.z) pt = await gz(pt, false);
+  return JSON.parse(td.decode(pt));
+}
+/* junta as alterações de dois aparelhos: fica a versão mais nova de cada item; exclusões valem */
+const itemT = (x) => x.upd || x.edited || x.created || 0;
+function mergeData(a, b) {
+  const del = { ...(b.deleted || {}) };
+  for (const [k, t] of Object.entries(a.deleted || {})) del[k] = Math.max(t, del[k] || 0);
+  const old = Date.now() - 180 * 86400000;
+  for (const k of Object.keys(del)) if (del[k] < old) delete del[k];
+  const pick = (xs = [], ys = []) => {
+    const m = new Map();
+    for (const x of [...ys, ...xs]) { const o = m.get(x.id); if (!o || itemT(x) >= itemT(o)) m.set(x.id, x); }
+    return [...m.values()].filter((x) => !(del[x.id] && del[x.id] >= itemT(x))).sort((p, q) => (q.created || 0) - (p.created || 0));
+  };
+  return { ...b, ...a, gabaritos: pick(a.gabaritos, b.gabaritos), results: pick(a.results, b.results), deleted: del };
+}
+const canon = (d) => JSON.stringify([(d.gabaritos || []).map((x) => [x.id, itemT(x)]).sort(), (d.results || []).map((x) => [x.id, itemT(x)]).sort(), Object.keys(d.deleted || {}).sort()]);
+function stamp(x) { x.upd = Date.now(); return x; }
+function tomb(id) { S.data.deleted = S.data.deleted || {}; S.data.deleted[id] = Date.now(); }
+/* começa a sincronizar depois que o cofre local foi aberto (ou para trazer a conta de outro aparelho) */
+async function syncStart(user, pw, { create = false } = {}) {
+  sync.on = false; sync.email = await syncEmail(user); sync.authPw = await authSecret(user, pw);
+  try {
+    if (create) await syncSignUp();
+    else {
+      try { await syncSignIn(); }
+      catch (e) {
+        if (e.code === "offline") throw e;
+        if (/confirm/i.test(e.message)) throw syncErr("O servidor de sincronização pede confirmação de e-mail. Desative em Authentication → Sign In / Providers → Email → Confirm email.", "confirm");
+        if (!S.data) throw syncErr("Usuário ou senha incorretos.", "wrongpw");
+        try { await syncSignUp(); } // conta que só existia neste aparelho: cria no servidor
+        catch (e2) { if (e2.code === "exists") throw syncErr("A senha desta conta foi trocada em outro aparelho. Entre com a senha nova.", "wrongpw"); throw e2; }
+      }
+    }
+  } catch (e) { if (e.code === "offline") return false; throw e; }
+  const remote = await remoteVault();
+  let push = true;
+  if (remote) {
+    const v = await openVault(remote.blob, pw);
+    const merged = S.data ? mergeData(S.data, v.data) : v.data;
+    push = canon(merged) !== canon(v.data);
+    Object.assign(S, { key: v.key, salt: v.salt, data: merged });
+    sync.remoteT = remote.t;
+  } else if (!S.data) throw syncErr("Usuário ou senha incorretos.", "wrongpw");
+  sync.on = true;
+  if (push) await pushVault(); else { ls.set(PREFIX + S.acct, remote.blob); sync.last = Date.now(); }
+  return true;
+}
+let syncChain = Promise.resolve();
+function syncNow() {
+  if (!sync.on || !S.key) return syncChain;
+  syncChain = syncChain.then(doSync).catch((e) => { console.warn(e); sync.err = e.userMsg || "Não consegui sincronizar agora. Tento de novo em instantes."; updateSyncNote(); });
+  return syncChain;
+}
+async function doSync() {
+  if (!sync.on || !S.key) return;
+  const remote = await remoteVault();
+  let changed = false;
+  if (remote && remote.t > sync.remoteT) {
+    if (JSON.parse(remote.blob).salt !== b64(S.salt)) { sync.on = false; logout("A senha desta conta foi trocada em outro aparelho. Entre com a senha nova."); return; }
+    const rdata = await openWithKey(remote.blob, S.key), before = canon(S.data);
+    S.data = mergeData(S.data, rdata);
+    changed = canon(S.data) !== before;
+    sync.remoteT = remote.t;
+    if (canon(S.data) !== canon(rdata)) sync.dirty = true;
+    else ls.set(PREFIX + S.acct, remote.blob);
+  }
+  if (sync.dirty || !remote) await pushVault();
+  for (const rid of [...sync.pendingImgs]) {
+    const o = await idb.get(imgKey(rid)).catch(() => null);
+    if (o) await api("/rest/v1/imagens", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, id: rid, iv: b64(o.iv), ct: b64(o.ct) } });
+    sync.pendingImgs.delete(rid);
+  }
+  sync.last = Date.now(); sync.err = "";
+  if (changed && !S.edit && !S.review && !S.manual && $("#modal").hidden) render();
+  updateSyncNote();
+}
+function updateSyncNote() {
+  const n = $("#sync-note"); if (!n) return;
+  n.textContent = syncText();
+}
+function syncText() {
+  if (!syncEnabled()) return "";
+  if (!sync.on) return "Sem conexão com o servidor: os dados ficam neste aparelho e sincronizam quando você entrar de novo com internet.";
+  if (sync.err) return sync.err;
+  return sync.last ? `Sincronizado às ${new Date(sync.last).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : "Sincronizando…";
+}
+
 /* IndexedDB: imagens cifradas dos cartões corrigidos */
 const idb = {
   db: null,
@@ -351,17 +498,36 @@ async function putImageEnc(rid, enc) {
   let ok = false;
   try { await idb.put(imgKey(rid), enc); ok = true; } catch (e) { console.warn(e); }
   const c = await cloudWrite(imgDoc(rid), { acct: S.acct, iv: b64(enc.iv), ct: b64(enc.ct) });
-  return ok || c;
+  let r = false;
+  if (sync.on) {
+    try { await api("/rest/v1/imagens", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { user_id: sync.uid, id: rid, iv: b64(enc.iv), ct: b64(enc.ct) } }); r = true; }
+    catch (e) { console.warn(e); sync.pendingImgs.add(rid); }
+  }
+  return ok || c || r;
 }
 async function getImageEnc(rid) {
   try { const o = await idb.get(imgKey(rid)); if (o) return o; } catch {}
-  const d = await cloudGet(imgDoc(rid));
+  let d = await cloudGet(imgDoc(rid));
+  if (!d && sync.on) { try { const rows = await api(`/rest/v1/imagens?select=iv,ct&id=eq.${encodeURIComponent(rid)}`); d = rows && rows[0]; } catch (e) { console.warn(e); } }
   if (!d) return null;
   const o = { iv: unb64(d.iv), ct: unb64(d.ct).buffer };
   idb.put(imgKey(rid), o).catch(() => {});
   return o;
 }
-async function imageBytes(rid, key = S.key) { const o = await getImageEnc(rid); return o ? decBytes(key, o) : null; }
+async function imageBytes(rid, key = S.key) {
+  const o = await getImageEnc(rid);
+  if (!o) return null;
+  try { return await decBytes(key, o); }
+  catch (e) { // cópia guardada com a senha antiga: busca a versão atual no servidor
+    if (!sync.on) throw e;
+    const rows = await api(`/rest/v1/imagens?select=iv,ct&id=eq.${encodeURIComponent(rid)}`);
+    if (!rows || !rows[0]) throw e;
+    const fresh = { iv: unb64(rows[0].iv), ct: unb64(rows[0].ct).buffer };
+    const bytes = await decBytes(key, fresh);
+    idb.put(imgKey(rid), fresh).catch(() => {});
+    return bytes;
+  }
+}
 async function saveImage(rid, canvas) {
   try {
     const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.8));
@@ -376,7 +542,11 @@ async function loadImage(rid) {
     return c;
   } catch (e) { console.warn(e); return null; }
 }
-async function deleteImage(rid) { try { await idb.del(imgKey(rid)); } catch {} cloudWrite(imgDoc(rid), null); }
+async function deleteImage(rid) {
+  try { await idb.del(imgKey(rid)); } catch {}
+  cloudWrite(imgDoc(rid), null);
+  if (sync.on) api(`/rest/v1/imagens?id=eq.${encodeURIComponent(rid)}`, { method: "DELETE" }).catch((e) => console.warn(e));
+}
 
 /* ============================================================
    Estado
@@ -388,7 +558,8 @@ async function persist() {
   const blob = await sealVault(S.key, S.salt, S.data);
   const local = ls.set(PREFIX + S.acct, blob);
   const remote = await cloudWrite("conta-" + S.acct, { blob, t: Date.now() });
-  if (!local && !remote) toast("Não consegui salvar. Faça um backup na aba Conta.");
+  if (!local && !remote && !sync.on) toast("Não consegui salvar. Faça um backup na aba Conta.");
+  if (sync.on) { sync.dirty = true; syncNow(); }
 }
 const gabById = (id) => S.data.gabaritos.find((g) => g.id === id);
 const gabByCode = (c) => S.data.gabaritos.find((g) => g.code === c);
@@ -967,7 +1138,7 @@ function renderLock(msg = "", keep = {}) {
       </form>`}
     <p class="small muted" id="store-note">Verificando onde suas contas ficam guardadas…</p>
   </div>`;
-  cloudReady().then((ok) => { const n = $("#store-note"); if (n) n.textContent = ok ? "Suas contas ficam guardadas com segurança na sua conta Claude: continuam funcionando depois de fechar o app e em outros aparelhos." : IN_CLAUDE ? "Neste acesso, as contas ficam guardadas só neste navegador. Para não perder nada, abra o app logado na sua conta Claude e faça backups." : "Suas contas ficam guardadas neste celular, criptografadas. Faça backups de vez em quando na aba Conta."; });
+  cloudReady().then((ok) => { const n = $("#store-note"); if (n) n.textContent = ok ? "Suas contas ficam guardadas com segurança na sua conta Claude: continuam funcionando depois de fechar o app e em outros aparelhos." : IN_CLAUDE ? "Neste acesso, as contas ficam guardadas só neste navegador. Para não perder nada, abra o app logado na sua conta Claude e faça backups." : syncEnabled() ? "Entre com o mesmo usuário e senha no celular, no computador ou no iPhone: seus gabaritos e notas aparecem em todos, sempre criptografados." : "Suas contas ficam guardadas neste celular, criptografadas. Faça backups de vez em quando na aba Conta."; });
   $("#m-login").onclick = () => { lockMode = "login"; renderLock(); };
   $("#m-new").onclick = () => { lockMode = "new"; renderLock(); };
   if (isLogin) {
@@ -977,7 +1148,7 @@ function renderLock(msg = "", keep = {}) {
       if (S.fails >= 3) { busy(true, "Muitas tentativas. Aguarde…"); await sleep(Math.min(30000, 1000 * 2 ** (S.fails - 2))); }
       busy(true, "Entrando…");
       try { await login(user, pw); S.fails = 0; busy(false); enterApp(); }
-      catch { S.fails++; busy(false); renderLock("Usuário ou senha incorretos.", { user }); }
+      catch (err) { console.warn(err); if (!err || err.code !== "offline") S.fails++; busy(false); renderLock((err && err.userMsg) || "Usuário ou senha incorretos.", { user }); }
     };
     $("#forgot").onclick = forgotModal;
   } else {
@@ -996,6 +1167,11 @@ function renderLock(msg = "", keep = {}) {
       ls.set(LAST_USER, user);
       S.acct = id; S.salt = crypto.getRandomValues(new Uint8Array(16)); S.key = await deriveKey(a, S.salt);
       S.data = exampleData({ name, username: user });
+      if (syncEnabled()) {
+        busy(true, "Criando conta no servidor…");
+        try { await syncStart(user, a, { create: true }); }
+        catch (err) { busy(false); Object.assign(S, { acct: null, key: null, data: null }); return renderLock(err.userMsg || "Não consegui criar a conta no servidor. Tente de novo.", keep); }
+      }
       await persist();
       busy(false); enterApp();
     };
@@ -1006,9 +1182,19 @@ function renderLock(msg = "", keep = {}) {
 async function login(user, pw) {
   await cloudReady();
   const id = await acctId(user), blob = await vaultBlob(id);
+  Object.assign(S, { acct: id, key: null, salt: null, data: null });
+  let localOk = false;
   if (blob) {
-    const v = await openVault(blob, pw);
-    Object.assign(S, { acct: id, key: v.key, salt: v.salt, data: v.data });
+    try { const v = await openVault(blob, pw); Object.assign(S, { key: v.key, salt: v.salt, data: v.data }); localOk = true; }
+    catch (e) { if (!syncEnabled()) throw e; } // a senha pode ter sido trocada em outro aparelho
+  }
+  if (syncEnabled()) {
+    const online = await syncStart(user, pw).catch((e) => { if (localOk && e.code === "offline") return false; throw e; });
+    if (!online && !localOk) throw syncErr("Sem internet, e esta conta ainda não está neste aparelho. Conecte-se e tente de novo.", "offline");
+    ls.set(LAST_USER, user.trim());
+    return;
+  }
+  if (localOk) {
     ls.set(LAST_USER, user.trim());
     if (cloud.db && !(await cloudGet("conta-" + id))) persist(); // conta antiga só do aparelho: copia para a nuvem
     return;
@@ -1035,6 +1221,10 @@ function forgotModal() {
   });
 }
 async function wipeAccount(id) {
+  if (sync.on && id === S.acct) {
+    try { await api(`/rest/v1/imagens?user_id=eq.${sync.uid}`, { method: "DELETE" }); await api(`/rest/v1/cofres?user_id=eq.${sync.uid}`, { method: "DELETE" }); }
+    catch (e) { console.warn(e); }
+  }
   ls.del(PREFIX + id);
   try { for (const k of await idb.keys(id + ":")) await idb.del(k); } catch {}
   if (cloud.db) {
@@ -1043,6 +1233,8 @@ async function wipeAccount(id) {
   }
 }
 function logout(reason, mode = "login") {
+  Object.assign(sync, { on: false, token: null, uid: null, authPw: null, email: null, remoteT: 0, dirty: false, err: "" });
+  sync.pendingImgs.clear();
   Object.assign(S, { acct: null, key: null, data: null, review: null, edit: null, manual: null, lastPhoto: null, reveal: {} });
   lockMode = mode; closeModal(); renderLock(reason || "");
 }
@@ -1080,6 +1272,8 @@ function renderGabaritos(v) {
     if (!(await confirmBox("Apagar exemplos?", "Os gabaritos e resultados de exemplo serão removidos. Seus dados não são afetados.", "Apagar exemplos"))) return;
     const exIds = new Set(S.data.gabaritos.filter((g) => g.example).map((g) => g.id));
     for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) deleteImage(r.id);
+    for (const g of S.data.gabaritos) if (g.example) tomb(g.id);
+    for (const r of S.data.results) if (r.example || exIds.has(r.gabId)) tomb(r.id);
     S.data.gabaritos = S.data.gabaritos.filter((g) => !g.example);
     S.data.results = S.data.results.filter((r) => !r.example && !exIds.has(r.gabId));
     await persist(); toast("Exemplos apagados"); render();
@@ -1112,6 +1306,7 @@ async function gabAction(act, id) {
   if (act === "del") {
     const rs = resultsOf(id);
     if (!(await confirmBox("Excluir gabarito?", `“${esc(g.name)}” será apagado${rs.length ? ` junto com ${rs.length} prova${rs.length > 1 ? "s" : ""} corrigida${rs.length > 1 ? "s" : ""}` : ""}. Não dá para desfazer.`, "Excluir"))) return;
+    tomb(id); for (const r of rs) tomb(r.id);
     S.data.gabaritos = S.data.gabaritos.filter((x) => x.id !== id);
     S.data.results = S.data.results.filter((r) => r.gabId !== id);
     for (const r of rs) deleteImage(r.id);
@@ -1190,11 +1385,11 @@ function renderEditor(v) {
     if (miss >= 0) return toast(`Falta a resposta da questão ${miss + 1}.`);
     if (e.id) {
       const i = S.data.gabaritos.findIndex((x) => x.id === e.id);
-      S.data.gabaritos[i] = { ...S.data.gabaritos[i], name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice() };
+      S.data.gabaritos[i] = stamp({ ...S.data.gabaritos[i], name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice() });
       const g = S.data.gabaritos[i];
-      for (const r of resultsOf(g.id)) Object.assign(r, grade(g, r.answers));
+      for (const r of resultsOf(g.id)) stamp(Object.assign(r, grade(g, r.answers)));
     } else {
-      S.data.gabaritos.unshift({ id: uid(), code: newCode(), name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), created: Date.now() });
+      S.data.gabaritos.unshift(stamp({ id: uid(), code: newCode(), name: e.name.trim(), subject: e.subject.trim(), nQ: e.nQ, nAlt: e.nAlt, points: e.points, key: e.key.slice(), created: Date.now() }));
     }
     await persist(); S.edit = null; toast("Gabarito salvo"); render();
   };
@@ -1379,10 +1574,10 @@ function renderReview(v) {
     const name = R.student.trim() || `Aluno ${resultsOf(g.id).length + 1}`, turma = R.turma.trim();
     S.data.prefs = { ...(S.data.prefs || {}), lastTurma: turma };
     let id = R.resultId;
-    if (id) Object.assign(S.data.results.find((r) => r.id === id), { student: name, turma, answers: R.answers.slice(), ...gr, edited: Date.now() });
+    if (id) stamp(Object.assign(S.data.results.find((r) => r.id === id), { student: name, turma, answers: R.answers.slice(), ...gr, edited: Date.now() }));
     else {
       id = uid();
-      S.data.results.unshift({ id, gabId: g.id, student: name, turma, answers: R.answers.slice(), ...gr, created: Date.now() });
+      S.data.results.unshift(stamp({ id, gabId: g.id, student: name, turma, answers: R.answers.slice(), ...gr, created: Date.now() }));
       if (R.rect && !(await saveImage(id, R.rect))) toast("A nota foi salva, mas a imagem do cartão não coube no aparelho.");
     }
     await persist(); toast(`Salvo: ${name} · ${fmtNum(gr.score)}`);
@@ -1393,7 +1588,7 @@ function renderReview(v) {
   const del = $("#rv-del");
   if (del) del.onclick = async () => {
     if (!(await confirmBox("Excluir prova corrigida?", `A correção de ${esc(R.student)} e a imagem do cartão serão apagadas.`, "Excluir"))) return;
-    S.data.results = S.data.results.filter((r) => r.id !== R.resultId); deleteImage(R.resultId);
+    tomb(R.resultId); S.data.results = S.data.results.filter((r) => r.id !== R.resultId); deleteImage(R.resultId);
     await persist(); S.review = null; toast("Prova excluída"); go("resultados");
   };
 }
@@ -1629,13 +1824,17 @@ function renderAccount(v) {
   v.innerHTML = `<div class="stack tight"><h1>${esc(u.name || "Minha conta")}</h1><p class="muted">Usuário <b>@${esc(u.username || "")}</b> · ${S.data.gabaritos.length} gabarito(s) · ${S.data.results.length} prova(s) corrigida(s)</p></div>
     <div class="panel"><h3>Como seus dados são protegidos</h3>
       <ul class="tips small">
-        <li>Gabaritos, notas e imagens dos cartões ficam <b>criptografados (AES-256)</b> com uma chave gerada a partir da sua senha, e só então são guardados ${cloud.db ? "na sua conta Claude (funciona depois de fechar o app e em outros aparelhos)" : "neste navegador"}.</li>
+        <li>Gabaritos, notas e imagens dos cartões ficam <b>criptografados (AES-256)</b> com uma chave gerada a partir da sua senha, e só então são guardados ${cloud.db ? "na sua conta Claude (funciona depois de fechar o app e em outros aparelhos)" : sync.on ? "neste aparelho e no servidor de sincronização" : "neste aparelho"}.</li>
         <li>A senha nunca é gravada. Sem usuário e senha, os dados são ilegíveis, inclusive para quem pegar o celular.</li>
         <li>Cada professor que usa este aparelho tem a sua conta, separada das outras.</li>
         <li>O app sai sozinho após ${AUTOLOCK_MIN} minutos sem uso. Toque em <b>Sair</b> antes de emprestar o aparelho.</li>
         <li>As fotos são lidas no próprio celular. Só a imagem do cartão já criptografada é guardada.</li>
       </ul>
     </div>
+    ${syncEnabled() ? `<div class="panel"><div class="spread"><h3>Sincronização entre aparelhos</h3><span class="chip ${sync.on && !sync.err ? "ok" : "warn"}">${sync.on && !sync.err ? "ativa" : "pausada"}</span></div>
+      <p class="small muted">Use o mesmo usuário e senha no celular, no computador ou no iPhone: gabaritos, notas e imagens dos cartões aparecem em todos. Tudo é enviado já criptografado com a sua senha; nem o servidor consegue ler.</p>
+      <p class="small" id="sync-note">${esc(syncText())}</p>
+      <div><button class="btn" type="button" id="sx-sync" ${sync.on ? "" : "disabled"}>Sincronizar agora</button></div></div>` : ""}
     <div class="panel"><h3>Backup</h3>
       <p class="small muted">O backup reúne gabaritos, notas e imagens dos cartões num arquivo criptografado, que só abre com a senha em uso quando você o gerou. Guarde-o no seu e-mail ou Drive para não perder nada se trocar de celular.</p>
       <div class="row"><button class="btn primary" type="button" id="sx-exp">Baixar backup</button><button class="btn" type="button" id="sx-imp">Restaurar backup</button></div>
@@ -1658,16 +1857,24 @@ function renderAccount(v) {
     if (await saveFile(`backup-corretor-${slug((S.data.user && S.data.user.username) || "conta")}-${new Date().toISOString().slice(0, 10)}.json`, blob)) toast("Backup pronto");
   };
   $("#sx-imp").onclick = () => { S.importMode = "merge"; $("#file-backup").click(); };
+  const sb = $("#sx-sync");
+  if (sb) sb.onclick = async () => { sb.disabled = true; $("#sync-note").textContent = "Sincronizando…"; sync.dirty = true; await syncNow(); sb.disabled = false; updateSyncNote(); if (!sync.err) toast("Tudo sincronizado"); };
   $("#sx-pw").onsubmit = async (e) => {
     e.preventDefault();
     const o = $("#sx-old").value, n = $("#sx-new").value, n2 = $("#sx-new2").value;
-    try { await openVault(await vaultBlob(S.acct), o); } catch { return toast("A senha atual está errada."); }
+    try { await openVault(sync.on ? (await remoteVault()).blob : await vaultBlob(S.acct), o); } catch { return toast("A senha atual está errada."); }
     if (n.length < 8) return toast("A nova senha precisa ter 8 caracteres ou mais.");
     if (n !== n2) return toast("As novas senhas não são iguais.");
     busy(true, "Trocando senha…");
+    if (sync.on) { // primeiro o servidor: se falhar, nada muda
+      try { const np = await authSecret(S.data.user.username, n); await api("/auth/v1/user", { method: "PUT", body: { password: np } }); sync.authPw = np; }
+      catch (e) { busy(false); return toast(e.code === "offline" ? "Para trocar a senha é preciso estar com internet." : "Não consegui trocar a senha no servidor. Tente de novo."); }
+    }
     const oldKey = S.key, salt = crypto.getRandomValues(new Uint8Array(16)), key = await deriveKey(n, salt);
     for (const r of S.data.results) { try { const bytes = await imageBytes(r.id, oldKey); if (bytes) await putImageEnc(r.id, await encBytes(key, bytes)); } catch {} }
-    S.salt = salt; S.key = key; await persist();
+    S.salt = salt; S.key = key;
+    if (sync.on) { await syncChain; await pushVault(); }
+    await persist();
     busy(false); toast("Senha trocada. Backups antigos continuam com a senha antiga."); render();
   };
   $("#sx-wipe").onclick = async () => {
@@ -1688,13 +1895,17 @@ async function onBackupFile(file) {
     const user = data.user && data.user.username;
     if (!user) { busy(false); return toast("Este backup é de uma versão antiga. Crie uma conta e use Restaurar backup na aba Conta."); }
     Object.assign(S, { acct: await acctId(user), key: v.key, salt: v.salt, data: { ...data, version: 2 } });
+    if (syncEnabled()) {
+      try { await syncStart(user, pw); }
+      catch (e) { busy(false); Object.assign(S, { acct: null, key: null, data: null }); return toast(e.userMsg || "Não consegui ligar a sincronização. Tente de novo."); }
+    }
     for (const [rid, b] of Object.entries(images)) await putImageEnc(rid, await encBytes(S.key, unb64(b))).catch(() => {});
     await persist(); busy(false); toast(`Backup restaurado. Seu usuário é @${user}.`); return enterApp();
   }
   let ng = 0, nr = 0;
-  for (const g of data.gabaritos || []) if (!gabById(g.id)) { if (gabByCode(g.code)) g.code = newCode(); S.data.gabaritos.push(g); ng++; }
+  for (const g of data.gabaritos || []) if (!gabById(g.id)) { if (gabByCode(g.code)) g.code = newCode(); S.data.gabaritos.push(stamp(g)); ng++; }
   for (const r of data.results || []) if (!S.data.results.find((x) => x.id === r.id)) {
-    S.data.results.push(r); nr++;
+    S.data.results.push(stamp(r)); nr++;
     if (images[r.id]) await putImageEnc(r.id, await encBytes(S.key, unb64(images[r.id]))).catch(() => {});
   }
   await persist(); busy(false); toast(`Restaurados: ${ng} gabarito(s) e ${nr} prova(s)`); render();
@@ -1708,6 +1919,9 @@ $("#btn-lock").onclick = () => logout();
 $("#file-cam").onchange = (e) => { onPhoto(e.target.files[0]); e.target.value = ""; };
 $("#file-gal").onchange = (e) => { onPhoto(e.target.files[0]); e.target.value = ""; };
 $("#file-backup").onchange = (e) => { onBackupFile(e.target.files[0]); e.target.value = ""; };
+setInterval(() => { if (sync.on && S.key && !document.hidden) syncNow(); }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && sync.on && S.key) syncNow(); });
+window.addEventListener("online", () => { if (sync.on && S.key) syncNow(); });
 ["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => (S.lastActive = Date.now()), { passive: true }));
 setInterval(() => { if (S.key && Date.now() - S.lastActive > AUTOLOCK_MIN * 60000) logout("Você saiu por inatividade. Entre de novo para continuar."); }, 20000);
 renderLock();

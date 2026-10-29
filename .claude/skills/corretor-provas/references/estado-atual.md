@@ -13,6 +13,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 
 ## Pendências
 
+- **Sincronização entre aparelhos (pedida em 29/10/2026)**: código pronto e testado com servidor simulado (`testar_sincronizacao.js`, 16 testes), mas **desligada** até o professor criar o projeto no Supabase e informar a Project URL e a publishable key. Depois: preencher `SUPA` em `index.html`, testar, publicar APK 1.2 (versionCode 3) e o site. Não testado ainda com o Supabase real.
 - **Ativar o GitHub Pages** (o professor faz; passos em `publicar.md`). Depois confirmar com a API e guiar a instalação no iPhone.
 - **Chave de assinatura permanente do APK**: ainda não configurada. Os segredos `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASS` não existem; cada build sai com chave de depuração descartável. A chave gerada na sessão original (`android/keystore/`) estava fora do git e pode ter se perdido: se não existir, gere outra com `keytool` (alias `corretor`) e guie o professor a criar os dois segredos. Oferecido ao professor em 28/10/2026, sem resposta ainda.
 - **Teste em aparelho real**: o APK e a leitura com fotos reais ainda não foram confirmados pelo professor. Se ele mandar uma foto que falhou, siga "Quando a leitura falha numa foto real" no SKILL.md.
@@ -28,6 +29,7 @@ Atualize este arquivo ao terminar cada mudança (versão, data, o que mudou, pen
 7. Transformar o trabalho numa **skill** (esta) e mantê-la atualizada.
 8. Versão 1.1: campos do cadastro não podem se sobrepor; **gabarito todo na vertical** ao marcar as respostas certas; **gráfico de pizza** em Resultados (notas por faixa / tipo de resposta).
 9. "Gostei bastante do app": manter o visual e o funcionamento atuais.
+10. Abrir o app no **computador** com os mesmos dados do celular → escolheu a opção de **sincronização própria** (Supabase, dados cifrados no aparelho).
 
 ## Funcionalidades atuais (resumo)
 

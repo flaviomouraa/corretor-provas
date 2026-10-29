@@ -28,10 +28,12 @@ O mesmo `index.html` roda em três lugares, e o código detecta onde está:
 - **PWA** (navegador / tela inicial): sem `window.claude`. Dados em `localStorage` + IndexedDB; `navigator.storage.persist()`.
 - **APK Android**: existe `window.AndroidBridge` (salvar arquivos em Downloads). Carregado de `https://appassets.androidplatform.net/` para ter contexto seguro (Web Crypto exige).
 
+**Sincronização entre aparelhos** (PWA e APK, fora do Claude): ligada quando `SUPA.url` e `SUPA.key` estão preenchidos em `index.html`. Usa o Supabase do professor só como depósito de dados já cifrados; detalhes em `references/sincronizacao.md`.
+
 ## Fluxo de trabalho para qualquer mudança
 
 1. Edite `index.html`.
-2. Rode os testes: `node .claude/skills/corretor-provas/scripts/testar_app.js` (precisa de Playwright; o Chromium já vem no ambiente). Todos devem dar OK. Se mexeu na leitura óptica, rode antes e depois para comparar.
+2. Rode os testes: `node .claude/skills/corretor-provas/scripts/testar_app.js` (precisa de Playwright; o Chromium já vem no ambiente). Todos devem dar OK. Se mexeu na leitura óptica, rode antes e depois para comparar. Se mexeu em salvar, login, contas ou sincronização, rode também `python3 tools/build_pwa.py && node .claude/skills/corretor-provas/scripts/testar_sincronizacao.js` (dois aparelhos + servidor simulado).
 3. Regenere a versão instalável: `python3 tools/build_pwa.py`.
 4. Publique onde o usuário usa (veja `references/publicar.md`): Artifact no Claude, GitHub Pages (`docs/`) e/ou APK (aumente `versionCode`/`versionName` em `android/app/build.gradle`).
 5. Faça commit. Nunca envie `android/keystore/`.
@@ -45,6 +47,8 @@ Estas regras existem porque cartões já impressos e dados já salvos dependem d
 - **Geometria do cartão** (`BLK`, `blockLayout`, `unitBitX`, `codeBitsOf`, `finderSVG`): mudar qualquer número invalida os cartões que os professores já imprimiram ou colaram nas provas. Se precisar mudar, crie um formato novo e mantenha a leitura do antigo, ou avise claramente o usuário que é preciso reimprimir. Detalhes em `references/leitura-optica.md`.
 - **Nada de borda/moldura ligando os marcadores**: os 4 marcadores precisam ser manchas separadas para serem encontrados.
 - **Formato do cofre** (`sealVault`/`openVault`, `PREFIX`, `acctId`, nomes `conta-<id>` e `img-<conta>-<resultado>` no db): mudar sem migração faz o professor perder o acesso. Leia ambos os formatos e grave o novo.
+- **Toda alteração de dados passa por `stamp(item)` e toda exclusão por `tomb(id)`**, seguidas de `persist()`. Sem isso a sincronização não sabe qual versão é a mais nova e itens apagados "ressuscitam" vindos do outro aparelho.
+- **O servidor só recebe dado cifrado.** A senha do Supabase é `authSecret(usuário, senha)` (PBKDF2 com outro sal), nunca a senha real nem a chave do cofre.
 - **A senha nunca é gravada.** Tudo (gabaritos, notas, imagens) é cifrado com AES-GCM e chave PBKDF2 da senha. Não adicione "lembrar senha" que guarde a chave.
 - **Gabaritos com provas corrigidas não mudam o número de questões/alternativas** (o editor bloqueia). Mudar as respostas recalcula as notas salvas: isso é desejado.
 
@@ -73,3 +77,4 @@ Estas regras existem porque cartões já impressos e dados já salvos dependem d
 - `references/leitura-optica.md`: especificação do cartão e do algoritmo de leitura (leia antes de mexer em OMR ou no desenho do cartão).
 - `references/publicar.md`: como publicar no Claude (Artifact), GitHub Pages, APK e como o professor instala no Android e no iPhone.
 - `references/estado-atual.md`: versões publicadas, pendências e histórico do que o professor pediu.
+- `references/sincronizacao.md`: como funciona a sincronização (Supabase), configuração e problemas comuns.
