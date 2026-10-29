@@ -24,6 +24,9 @@ Objetivo do professor: abrir o app no celular, no computador e no iPhone com o m
 
 ## Problemas comuns
 
+- Primeiro uso real (29/10/2026): "Não consegui criar a conta no servidor" genérico. Desde a 1.2.1 o app mostra o motivo (`explain`) e **não bloqueia**: a conta fica no aparelho, `sync.authPw` fica em memória e `doSync` tenta `syncConnect(null)` a cada minuto até o servidor aceitar. Se o aparelho criou o cofre separado de outro (sal diferente), pede para sair e entrar de novo (`relogin`) para juntar com a senha.
+- Dois aparelhos que criaram a conta separados juntam os dados de exemplo dos dois: o botão "Apagar exemplos" resolve.
+
 - "pede confirmação de e-mail": passo 3 não foi feito.
 - Login diz senha incorreta logo após ativar: a conta pode ter sido criada em outro aparelho com outra senha; use a senha daquele aparelho.
 - Plano gratuito do Supabase pausa o projeto após ~7 dias sem uso: o app continua funcionando localmente e mostra "Não consegui sincronizar"; o professor reativa no painel do Supabase (Restore project).

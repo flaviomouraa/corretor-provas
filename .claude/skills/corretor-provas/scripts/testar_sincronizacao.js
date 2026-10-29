@@ -21,6 +21,7 @@ const DOCS = path.join(ROOT, "docs");
 
 /* ---------- servidor que imita o Supabase ---------- */
 const users = new Map(), tokens = new Map(), tables = { cofres: [], imagens: [] };
+let tablesReady = true; // false = o professor ainda não rodou o configurar.sql
 const keyOf = { cofres: (r) => r.user_id, imagens: (r) => r.user_id + "|" + r.id };
 function supaMock(req, res) {
   const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,PATCH,OPTIONS" };
@@ -48,6 +49,7 @@ function supaMock(req, res) {
     const m = u.pathname.match(/^\/rest\/v1\/(cofres|imagens)$/);
     if (!m) return send(404, { message: "not found" });
     if (!uid) return send(401, { message: "JWT required" });
+    if (!tablesReady) return send(404, { code: "PGRST205", message: `Could not find the table 'public.${m[1]}' in the schema cache` });
     const tbl = m[1], filters = [...u.searchParams].filter(([k]) => k !== "select").map(([k, v]) => [k, v.replace(/^eq\./, "")]);
     const mine = (r) => r.user_id === uid && filters.every(([k, v]) => String(r[k]) === v); // regra de acesso por linha
     if (req.method === "GET") return send(200, tables[tbl].filter(mine));
@@ -168,6 +170,29 @@ const check = (ok, msg) => { console.log(`${ok ? "OK  " : "FALHOU"}  ${msg}`); i
   const before = tables.cofres.length;
   await login(C.p, "conta.velha", "senha5678"); await C.p.waitForSelector("#view h1");
   check(tables.cofres.length === before + 1 && (await state(C.p)).on, "conta que só existia no aparelho passa a sincronizar");
+
+  // 10. servidor sem as tabelas (configurar.sql não rodado): a conta é criada no aparelho e sincroniza depois
+  tablesReady = false;
+  const D = await device("pc-do-flavio");
+  await D.p.click("#m-new"); await D.p.fill("#nw-name", "Flávio"); await D.p.fill("#nw-user", "flavio.moura"); await D.p.fill("#nw-pw", "senha9876"); await D.p.fill("#nw-pw2", "senha9876");
+  await D.p.click("#new-f button[type=submit]"); await D.p.waitForSelector("#view h1", { timeout: 30000 });
+  await D.p.click(".tab[data-tab=conta]");
+  check((await D.p.innerText("#sync-note")).includes("configurar.sql"), "sem as tabelas: entra no app e a aba Conta explica que falta rodar o configurar.sql");
+  // segunda tentativa de criar a mesma conta (já existe pela metade no servidor) também não trava
+  const E = await device("celular-do-flavio");
+  await E.p.click("#m-new"); await E.p.fill("#nw-name", "Flávio"); await E.p.fill("#nw-user", "flavio.moura"); await E.p.fill("#nw-pw", "senha9876"); await E.p.fill("#nw-pw2", "senha9876");
+  await E.p.click("#new-f button[type=submit]"); await E.p.waitForSelector("#view h1", { timeout: 30000 });
+  check(true, "criar de novo a conta que ficou pela metade não dá erro");
+  tablesReady = true;
+  const before10 = tables.cofres.length;
+  await D.p.click("#sx-sync"); await D.p.waitForFunction(() => sync.on, null, { timeout: 30000 });
+  check(tables.cofres.length === before10 + 1, "depois de criar as tabelas, o aparelho sincroniza sozinho");
+  await syncNowP(E.p);
+  check((await E.p.evaluate(() => sync.err)).includes("entre de novo"), "o outro aparelho (conta criada separada) pede para entrar de novo");
+  const ePronto = await E.p.evaluate(() => S.data.results.length);
+  await E.p.click("#btn-lock"); await login(E.p, "flavio.moura", "senha9876"); await E.p.waitForSelector("#view h1");
+  await syncNowP(D.p);
+  check((await E.p.evaluate(() => sync.on)) && (await D.p.evaluate(() => S.data.results.length)) === (await E.p.evaluate(() => S.data.results.length)), "ao entrar de novo, os dados dos dois aparelhos se juntam");
 
   check(errs.length === 0, `sem erros de JavaScript${errs.length ? ": " + errs.slice(0, 3).join(" | ") : ""}`);
   await browser.close();

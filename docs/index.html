@@ -417,16 +417,39 @@ const canon = (d) => JSON.stringify([(d.gabaritos || []).map((x) => [x.id, itemT
 function stamp(x) { x.upd = Date.now(); return x; }
 function tomb(id) { S.data.deleted = S.data.deleted || {}; S.data.deleted[id] = Date.now(); }
 /* começa a sincronizar depois que o cofre local foi aberto (ou para trazer a conta de outro aparelho) */
-async function syncStart(user, pw, { create = false } = {}) {
-  sync.on = false; sync.email = await syncEmail(user); sync.authPw = await authSecret(user, pw);
+/* explica em português o que o servidor respondeu */
+function explain(e) {
+  if (e && e.userMsg) return e.userMsg;
+  const m = `${e && e.message} ${e && e.code}`;
+  if (/schema cache|does not exist|PGRST205|42P01/i.test(m)) return "Falta criar as tabelas no Supabase: rode o arquivo configurar.sql no SQL Editor.";
+  if (/permission denied|42501|row-level security/i.test(m)) return "O Supabase recusou o acesso às tabelas: rode o configurar.sql de novo no SQL Editor.";
+  if (/rate limit|over_.*limit/i.test(m)) return "O Supabase bloqueou novas contas por alguns minutos (limite de segurança). Tento de novo sozinho.";
+  if (/signup.*(disabled|not allowed)|signup_disabled/i.test(m)) return "O cadastro está desligado no Supabase: em Authentication → Sign In / Providers, ative “Allow new users to sign up”.";
+  if (/email.*invalid|email_address_invalid/i.test(m)) return `O Supabase recusou o e-mail interno da conta (${e.message}).`;
+  if (/api key|apikey|No API key/i.test(m)) return "A chave do Supabase no app não foi aceita.";
+  return `O servidor de sincronização respondeu: ${e && e.message}`;
+}
+async function syncStart(user, pw, opts) {
+  sync.on = false; sync.err = ""; sync.email = await syncEmail(user); sync.authPw = await authSecret(user, pw);
+  return syncConnect(pw, opts);
+}
+/* entra no servidor e junta os dados. pw = null: retomada automática com a chave já aberta */
+async function syncConnect(pw, { create = false } = {}) {
   try {
-    if (create) await syncSignUp();
-    else {
+    if (create) {
+      try { await syncSignUp(); }
+      catch (e) { // conta criada pela metade numa tentativa anterior (mesma senha e sem cofre): continua
+        if (e.code !== "exists") throw e;
+        try { await syncSignIn(); } catch { throw e; }
+        if (await remoteVault()) throw e;
+      }
+    } else {
       try { await syncSignIn(); }
       catch (e) {
         if (e.code === "offline") throw e;
         if (/confirm/i.test(e.message)) throw syncErr("O servidor de sincronização pede confirmação de e-mail. Desative em Authentication → Sign In / Providers → Email → Confirm email.", "confirm");
         if (!S.data) throw syncErr("Usuário ou senha incorretos.", "wrongpw");
+        if (!/invalid|credentials/i.test(e.message + " " + e.code)) throw e;
         try { await syncSignUp(); } // conta que só existia neste aparelho: cria no servidor
         catch (e2) { if (e2.code === "exists") throw syncErr("A senha desta conta foi trocada em outro aparelho. Entre com a senha nova.", "wrongpw"); throw e2; }
       }
@@ -435,24 +458,31 @@ async function syncStart(user, pw, { create = false } = {}) {
   const remote = await remoteVault();
   let push = true;
   if (remote) {
-    const v = await openVault(remote.blob, pw);
+    let v;
+    if (pw) v = await openVault(remote.blob, pw);
+    else if (JSON.parse(remote.blob).salt === b64(S.salt)) v = { key: S.key, salt: S.salt, data: await openWithKey(remote.blob, S.key) };
+    else throw syncErr("Para juntar os dados deste aparelho com os da nuvem, toque em Sair e entre de novo com seu usuário e senha.", "relogin");
     const merged = S.data ? mergeData(S.data, v.data) : v.data;
     push = canon(merged) !== canon(v.data);
     Object.assign(S, { key: v.key, salt: v.salt, data: merged });
     sync.remoteT = remote.t;
   } else if (!S.data) throw syncErr("Usuário ou senha incorretos.", "wrongpw");
-  sync.on = true;
+  sync.on = true; sync.err = "";
   if (push) await pushVault(); else { ls.set(PREFIX + S.acct, remote.blob); sync.last = Date.now(); }
   return true;
 }
 let syncChain = Promise.resolve();
 function syncNow() {
-  if (!sync.on || !S.key) return syncChain;
-  syncChain = syncChain.then(doSync).catch((e) => { console.warn(e); sync.err = e.userMsg || "Não consegui sincronizar agora. Tento de novo em instantes."; updateSyncNote(); });
+  if (!S.key || (!sync.on && !sync.authPw)) return syncChain;
+  syncChain = syncChain.then(doSync).catch((e) => { console.warn(e); sync.err = e.code === "offline" ? "Sem internet agora. Sincronizo quando a conexão voltar." : explain(e); updateSyncNote(); });
   return syncChain;
 }
 async function doSync() {
-  if (!sync.on || !S.key) return;
+  if (!S.key) return;
+  if (!sync.on) { // a sincronização não começou (servidor fora do ar ou mal configurado): tenta de novo
+    if (!sync.authPw || !(await syncConnect(null))) return;
+    if (!S.edit && !S.review && !S.manual && $("#modal").hidden) render();
+  }
   const remote = await remoteVault();
   let changed = false;
   if (remote && remote.t > sync.remoteT) {
@@ -480,7 +510,7 @@ function updateSyncNote() {
 }
 function syncText() {
   if (!syncEnabled()) return "";
-  if (!sync.on) return "Sem conexão com o servidor: os dados ficam neste aparelho e sincronizam quando você entrar de novo com internet.";
+  if (!sync.on) return sync.err ? `Sincronização pendente. ${sync.err}` : "Sem conexão com o servidor: os dados ficam neste aparelho e sincronizam quando a conexão voltar.";
   if (sync.err) return sync.err;
   return sync.last ? `Sincronizado às ${new Date(sync.last).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : "Sincronizando…";
 }
@@ -1165,7 +1195,7 @@ function renderLock(msg = "", keep = {}) {
       if (S.fails >= 3) { busy(true, "Muitas tentativas. Aguarde…"); await sleep(Math.min(30000, 1000 * 2 ** (S.fails - 2))); }
       busy(true, "Entrando…");
       try { await login(user, pw); S.fails = 0; busy(false); enterApp(); }
-      catch (err) { console.warn(err); if (!err || err.code !== "offline") S.fails++; busy(false); renderLock((err && err.userMsg) || "Usuário ou senha incorretos.", { user }); }
+      catch (err) { console.warn(err); if (!err || err.code !== "offline") S.fails++; busy(false); renderLock((err && err.userMsg) || (err && err.status && err.status !== 400 ? explain(err) : "Usuário ou senha incorretos."), { user }); }
     };
     $("#forgot").onclick = forgotModal;
   } else {
@@ -1187,7 +1217,11 @@ function renderLock(msg = "", keep = {}) {
       if (syncEnabled()) {
         busy(true, "Criando conta no servidor…");
         try { await syncStart(user, a, { create: true }); }
-        catch (err) { busy(false); Object.assign(S, { acct: null, key: null, data: null }); return renderLock(err.userMsg || "Não consegui criar a conta no servidor. Tente de novo.", keep); }
+        catch (err) {
+          console.warn(err);
+          if (err.code === "exists" || err.code === "confirm") { busy(false); Object.assign(S, { acct: null, key: null, data: null }); return renderLock(err.userMsg, keep); }
+          sync.err = explain(err); // a conta fica no aparelho e sincroniza quando o servidor aceitar
+        }
       }
       await persist();
       busy(false); enterApp();
@@ -1206,7 +1240,10 @@ async function login(user, pw) {
     catch (e) { if (!syncEnabled()) throw e; } // a senha pode ter sido trocada em outro aparelho
   }
   if (syncEnabled()) {
-    const online = await syncStart(user, pw).catch((e) => { if (localOk && e.code === "offline") return false; throw e; });
+    const online = await syncStart(user, pw).catch((e) => {
+      if (localOk && !["wrongpw", "confirm"].includes(e.code)) { sync.err = e.code === "offline" ? "" : explain(e); return false; }
+      throw e;
+    });
     if (!online && !localOk) throw syncErr("Sem internet, e esta conta ainda não está neste aparelho. Conecte-se e tente de novo.", "offline");
     ls.set(LAST_USER, user.trim());
     return;
@@ -1260,6 +1297,7 @@ function enterApp() {
   $("#lock").hidden = true; $("#app").hidden = false; S.lastActive = Date.now();
   $("#who").textContent = S.data.user ? `${S.data.user.name} · @${S.data.user.username}` : "";
   render();
+  if (syncEnabled() && !sync.on && sync.err) setTimeout(() => toast("A sincronização está pendente. Veja o motivo na aba Conta."), 400);
 }
 
 /* ============================================================
@@ -1848,10 +1886,10 @@ function renderAccount(v) {
         <li>As fotos são lidas no próprio celular. Só a imagem do cartão já criptografada é guardada.</li>
       </ul>
     </div>
-    ${syncEnabled() ? `<div class="panel"><div class="spread"><h3>Sincronização entre aparelhos</h3><span class="chip ${sync.on && !sync.err ? "ok" : "warn"}">${sync.on && !sync.err ? "ativa" : "pausada"}</span></div>
+    ${syncEnabled() ? `<div class="panel"><div class="spread"><h3>Sincronização entre aparelhos</h3><span class="chip ${sync.on && !sync.err ? "ok" : "warn"}">${sync.on && !sync.err ? "ativa" : "pendente"}</span></div>
       <p class="small muted">Use o mesmo usuário e senha no celular, no computador ou no iPhone: gabaritos, notas e imagens dos cartões aparecem em todos. Tudo é enviado já criptografado com a sua senha; nem o servidor consegue ler.</p>
       <p class="small" id="sync-note">${esc(syncText())}</p>
-      <div><button class="btn" type="button" id="sx-sync" ${sync.on ? "" : "disabled"}>Sincronizar agora</button></div></div>` : ""}
+      <div><button class="btn" type="button" id="sx-sync" ${sync.on || sync.authPw ? "" : "disabled"}>${sync.on ? "Sincronizar agora" : "Tentar de novo"}</button></div></div>` : ""}
     <div class="panel"><h3>Backup</h3>
       <p class="small muted">O backup reúne gabaritos, notas e imagens dos cartões num arquivo criptografado, que só abre com a senha em uso quando você o gerou. Guarde-o no seu e-mail ou Drive para não perder nada se trocar de celular.</p>
       <div class="row"><button class="btn primary" type="button" id="sx-exp">Baixar backup</button><button class="btn" type="button" id="sx-imp">Restaurar backup</button></div>
@@ -1875,7 +1913,7 @@ function renderAccount(v) {
   };
   $("#sx-imp").onclick = () => { S.importMode = "merge"; $("#file-backup").click(); };
   const sb = $("#sx-sync");
-  if (sb) sb.onclick = async () => { sb.disabled = true; $("#sync-note").textContent = "Sincronizando…"; sync.dirty = true; await syncNow(); sb.disabled = false; updateSyncNote(); if (!sync.err) toast("Tudo sincronizado"); };
+  if (sb) sb.onclick = async () => { sb.disabled = true; $("#sync-note").textContent = "Sincronizando…"; sync.dirty = true; await syncNow(); if (!sync.err && sync.on) toast("Tudo sincronizado"); render(); };
   $("#sx-pw").onsubmit = async (e) => {
     e.preventDefault();
     const o = $("#sx-old").value, n = $("#sx-new").value, n2 = $("#sx-new2").value;
