@@ -21,12 +21,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Chave de assinatura (segredo ANDROID_KEYSTORE_B64)
+      - name: Chave de assinatura (segredos ANDROID_KEYSTORE_B64 e ANDROID_KEYSTORE_PASS)
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KP: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
           mkdir -p android/keystore
-          if [ -n "$KS" ]; then echo "$KS" | base64 -d > android/keystore/corretor.jks; fi
+          echo "TAMANHOS=chave ${#KS} caracteres, senha ${#KP} caracteres" >> "$GITHUB_ENV"
+          if [ -z "$KS" ]; then
+            echo "ASSINATURA=descartável (o GitHub não encontrou o segredo ANDROID_KEYSTORE_B64)" >> "$GITHUB_ENV"
+          else
+            printf '%s' "$KS" | tr -d ' \r\n\t' | base64 -d > android/keystore/corretor.jks 2>/dev/null || true
+            if keytool -list -keystore android/keystore/corretor.jks -storepass "$KP" >/dev/null 2>&1; then
+              FP=$(keytool -list -keystore android/keystore/corretor.jks -storepass "$KP" 2>/dev/null | grep -o 'SHA-256.*' | sed 's/.*: //')
+              echo "ASSINATURA=permanente (SHA-256 $FP)" >> "$GITHUB_ENV"
+            else
+              rm -f android/keystore/corretor.jks
+              echo "ASSINATURA=descartável (a chave ou a senha dos segredos não confere)" >> "$GITHUB_ENV"
+            fi
+          fi
 
       - name: Compilar
         working-directory: android
@@ -42,5 +55,9 @@ jobs:
         with:
           tag_name: apk-${{ github.run_number }}
           name: Corretor de Provas (APK ${{ github.run_number }})
-          body: Baixe o arquivo corretor-de-provas.apk no celular Android e abra para instalar.
+          body: |
+            Baixe o arquivo corretor-de-provas.apk no celular Android e abra para instalar.
+
+            Assinatura: ${{ env.ASSINATURA }}
+            Segredos recebidos: ${{ env.TAMANHOS }}
           files: corretor-de-provas.apk
